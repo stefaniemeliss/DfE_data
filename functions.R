@@ -479,11 +479,6 @@ webscrape_government_data <- function(dir_out = "path_to_directory",
     
   } else {
     
-    # # Apply the function to deal with relative urls to all release links
-    # release_links <- sapply(release_links, function(link) {
-    #   resolve_url(parent_url, link)
-    # })
-    
     # Output the release links to the console
     cat("\nLooping over these release links\n")
     cat("\t", release_links, sep = "\n\t")
@@ -491,6 +486,8 @@ webscrape_government_data <- function(dir_out = "path_to_directory",
     
     # loop over all releases
     for (release_url in release_links) {
+      
+      # release_url <- release_links[grepl("2017", release_links)]
       
       # get year 
       assign_dir_year("dir_year", file.path(dir_out, get_year(release_url)))
@@ -528,12 +525,15 @@ webscrape_government_data <- function(dir_out = "path_to_directory",
         download_links <- download_links[!grepl(".uk$", download_links)]
         download_links <- unique(download_links)
         
+        # remove any csv-preview links
+        download_links <- download_links[!grepl("csv-preview", download_links)]
+        
 
         if (length(download_links) > 0) {
           cat("\nFound download links on release URL...\n")
           cat("\t", download_links, sep = "\n\t")
           cat("\n")
-          sapply(download_links, download_data_from_url)
+          invisible(sapply(download_links, download_data_from_url))
         } else {
           cat("\nNo download buttons or links found for this release.\n")
         }
