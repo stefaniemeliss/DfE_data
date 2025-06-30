@@ -149,6 +149,17 @@ resolve_url <- function(base_url, relative_url) {
   }
 }
 
+# Function to handle url redirects
+get_final_url <- function(url) {
+  response <- GET(url, timeout(10))  # Timeout prevents hanging
+  if (status_code(response) == 200) {
+    return(response$url)
+  } else {
+    warning("Failed to resolve URL: HTTP ", status_code(response))
+    return(url)  # Fallback to original URL
+  }
+}
+
 # function to download data from an URL that directly links to a file
 download_data_from_url <- function(url){
   
