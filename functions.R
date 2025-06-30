@@ -111,36 +111,38 @@ is.sequential <- function(x){
 
 # Function to handle overlapping parts and convert relative URLs to absolute URLs
 resolve_url <- function(base_url, relative_url) {
-  if (!grepl("^http", relative_url)) {  # Check if the link is not absolute
-    # Remove the trailing slash from the base URL if it exists
+  if (!grepl("^http", relative_url)) {
     base_url <- sub("/$", "", base_url)
-    
-    # Remove the leading slash from the relative URL if it exists
     relative_url <- sub("^/", "", relative_url)
     
-    # Split the URLs into parts
     base_parts <- unlist(strsplit(base_url, "/"))
     relative_parts <- unlist(strsplit(relative_url, "/"))
     
-    # Find the index where the overlapping part starts
     overlap_index <- which(base_parts %in% relative_parts)
     
-    if (is.sequential(overlap_index)) {
-      # Find the first non-overlapping parts in the base URL
-      pre_overlap_base <- min(overlap_index) - 1
-      base_unique <- base_parts[1:pre_overlap_base]
-      
-      # Find the overlapping parts in the base URL
-      base_overlap <- base_parts[overlap_index]
-      
-      # Find the last non-overlapping parts in the relative URL
-      relative_unique <- relative_parts[! relative_parts %in% base_parts]
-      
-      # Combine the base URL with the overlapping and non-overlapping part of the relative URL 
-      absolute_url <- paste0(paste(base_unique, collapse = "/"), "/", paste(base_overlap, collapse = "/"), "/", paste(relative_unique, collapse = "/"))
-    } else {
-      absolute_url <- paste0(base_url, "/", relative_url)
+    # Handle empty overlap_index
+    if (length(overlap_index) == 0) {
+      return(paste0(base_url, "/", relative_url))
     }
+    
+    pre_overlap_base <- min(overlap_index) - 1
+    if (pre_overlap_base < 1) {
+      base_unique <- character(0)
+    } else {
+      base_unique <- base_parts[1:pre_overlap_base]
+    }
+    
+    base_overlap <- base_parts[overlap_index]
+    relative_unique <- relative_parts[!relative_parts %in% base_parts]
+    
+    # Construct URL safely
+    segments <- c(
+      paste0(base_unique, collapse = "/"),
+      paste0(base_overlap, collapse = "/"),
+      paste0(relative_unique, collapse = "/")
+    )
+    absolute_url <- paste(segments[segments != ""], collapse = "/")
+    
     return(absolute_url)
   } else {
     return(relative_url)
@@ -318,9 +320,16 @@ webscrape_government_data <- function(dir_out = "path_to_directory",
     html_nodes("a") %>%  # Select all <a> tags
     html_attr("href")    # Extract the href attribute
   
-  # check if there are any application/octet-stream links
-  download_links <-  unique(links[grepl("/files$", links)])
+  # Apply function to resolve relative URLs to all links
+  absolute_links <- sapply(links, function(link) {
+    resolve_url(parent_url, link)
+  })
   
+  # check if there are any application/octet-stream absolute_links
+  download_links <-  unique(absolute_links[grepl("/files$", absolute_links)])
+  # download_links <-  unique(absolute_links[grepl("/files$|content.explore|data-catalogue", absolute_links)])
+  # download_links <-  unique(absolute_links[grepl("/files", absolute_links)])
+
   if (identical(download_links, character(0)) == F) {
     cat("\nFound download links on parent URL...\n")
     cat("\t", download_links, sep = "\n\t")
