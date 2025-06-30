@@ -161,34 +161,29 @@ get_final_url <- function(url) {
 }
 
 # function to download data from an URL that directly links to a file
-download_data_from_url <- function(url){
-  
-  # determine header information
+download_data_from_url <- function(url) {
   headers = c(
     `user-agent` = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.5005.61 Safari/537.36'
   )
-  
   
   max_attempts <- 5
   successful <- FALSE
   
   for (attempt in 1:max_attempts) {
+    message(sprintf("Attempt %d to download: %s", attempt, url))
     request <- try(httr::GET(url = url, httr::add_headers(.headers = headers)), silent = TRUE)
     
     if (inherits(request, "try-error")) {
-      cat("\nHTTP request failed on attempt", attempt, "with an error. Retrying in", 2^(attempt-1), "seconds...\n")
+      message(sprintf("HTTP request failed on attempt %d with an error. Retrying in %d seconds...", attempt, 2^(attempt-1)))
       Sys.sleep(2^(attempt-1))
     } else {
       status_code <- httr::status_code(request)
       if (status_code != 200) {
-        # Check if the error is likely URL-related (client error)
         if (status_code == 404) {
-          cat("\nHTTP request failed on attempt", attempt, "with status code", status_code, 
-              "indicating a likely issue with the URL. Aborting.\n")
-          stop("URL Error: ", status_code)
+          message(sprintf("HTTP 404 error on attempt %d: URL likely invalid. Aborting.", attempt))
+          stop("URL Error: 404 Not Found")
         } else {
-          cat("\nHTTP request returned status", status_code, "on attempt", attempt, 
-              ". Retrying in", 2^(attempt-1), "seconds...\n")
+          message(sprintf("HTTP status %d on attempt %d. Retrying in %d seconds...", status_code, attempt, 2^(attempt-1)))
           Sys.sleep(2^(attempt-1))
         }
       } else {
@@ -199,116 +194,88 @@ download_data_from_url <- function(url){
   }
   
   if (!successful) {
-    stop("Failed to retrieve data after ", max_attempts, " attempts.")
+    stop(sprintf("Failed to retrieve data after %d attempts.", max_attempts))
   }
   
-  # retrieve information from URL 
-  # request <- httr::GET(url = url, httr::add_headers(.headers=headers))
-  # request <- httr::GET(url = url_meta, httr::add_headers(.headers=headers))
-  # request <- httr::GET(url = url_data, httr::add_headers(.headers=headers))
-  
-  # retrieve header information
+  # Determine filename from headers or URL
   input <- request$headers$`content-disposition`
-  
-  # check for file name information
-  if (!is.null(input) && nzchar(input)) { # input exists and is non-empty
-    
+  if (!is.null(input) && nzchar(input)) {
     if (grepl("'", input, perl = TRUE)) {
       tmp <- sub(".*'", "", input)
       tmp <- sub("%2F", "_", tmp)
     } else {
       tmp <- sub('[^\"]+\"([^\"]+).*', '\\1', input)
     }
-    tmp <- ifelse(nchar(tmp) > 100, gsub("_20", "", tmp), tmp) # replace if filename is too long
-    
-  } else {
-    
-    # Set a default filename or handle the error appropriately
-    cat("\nWarning: 'content-disposition' header is missing. Using a default filename.\n")
-    tmp <- paste0("download_", url, ".bin")
-    
-  }
-  
-  # check if higher level variable dir_year exists in environment
-  if (!exists("dir_year")){
-    
-    # get year from url
-    assign_dir_year("dir_year_data", url)
-    
-    # if url does not contain a year
-    if (identical(dir_year_data, character(0)) == T) {
-      
-      # check headers$`content-disposition`
-      assign_dir_year("dir_year_data", tmp)
+    if (nchar(tmp) > 100) {
+      tmp <- gsub("_20", "", tmp)
     }
-    
+  } else {
+    message("Warning: 'content-disposition' header missing. Using default filename.")
+    tmp <- paste0("download_", basename(url))
   }
   
-  # information on dir_year would come from a higher level in the script
-  if (!exists("dir_year") & exists("dir_year_data")){ # dir_year does not exist, but dir_year_data was created
-    
-    if (identical(dir_year_data, character(0)) == T) { # check it's not empty
-      
-      # if empty, ABORT & print to console
-      cat("\nNo information on year available, character is empty\n")
-      cat("\nSkipped file", tmp, "\n")
+  # Create directory if needed
+  if (!exists("dir_year")) {
+    assign_dir_year("dir_year_data", url)
+    if (identical(dir_year_data, character(0))) {
+      message("No year information available. Skipping file ", tmp)
       return(NULL)
-      
     } else {
-      
-      # if not empty, create directory to save data
       if (!dir.exists(dir_year_data)) {
         dir.create(dir_year_data)
       }
-      # declare dir_year_data to be the higher level dir_year variable
       dir_year <- dir_year_data
-      
     }
-    
   }
   
-  # determine file name
-  # if (grepl('[^/]', tmp, perl = T)) {
-  #   dir_ex <- sub("/[^/]+$", "", dir_year)
-  # } else {
-  #   dir_ex <- dir_year
-  # }
-  # 
-  # file_name <- file.path(dir_ex, tmp)
   file_name <- file.path(dir_year, tmp)
   
-  # retrieve raw content from request
-  cat("\nDownloading file from url...\n")
-  cat("\t", url, "\n")
-  cat("\tto", file_name, "\n")
-  bin <- content(request, "raw")
+  message("Downloading file from URL...")
+  message("\tURL: ", url)
+  message("\tSaving to: ", file_name)
   
-  # write binary data to file
+  bin <- httr::content(request, "raw")
   writeBin(bin, file_name)
+  
   while (!file.exists(file_name)) {
     Sys.sleep(1)
   }
   
-  cat("\t...done\n")
+  message("Download complete: ", basename(file_name))
   
-  
-  # unzip folder
-  if (grepl("zip", file_name)) {
-    
-    cat("Unzipping...\n")
-    cat("\t...done\n")
-    
-    if (grepl("performance-tables", dir_year)) {
-      # Remove everything after the last / from directory
-      dir_ex <- sub("/[^/]+$", "", dir_year)
-    } else {
-      dir_ex <- dir_year
-    }
-    
-    unzipped <- unzip(file_name, exdir = dir_ex)
-    file.remove(file_name)
+  # Unzip if ZIP file
+  if (grepl("\\.zip$", file_name, ignore.case = TRUE)) {
+    message("Unzipping file: ", basename(file_name))
+    tryCatch({
+      zip_list <- zip::zip_list(file_name)
+      if (nrow(zip_list) == 0) stop("Empty ZIP file")
+      zip::unzip(file_name, exdir = dir_year)
+      rm(zip_list)
+      gc()
+      
+      max_retries <- 3
+      for (i in 1:max_retries) {
+        if (file.exists(file_name)) {
+          removal_status <- file.remove(file_name)
+          if (removal_status) {
+            message("ZIP file removed after extraction.")
+            break
+          }
+          Sys.sleep(3)
+        } else {
+          break
+        }
+      }
+      if (file.exists(file_name)) {
+        warning("Failed to remove ZIP file after ", max_retries, " attempts. Please delete manually: ", file_name)
+      }
+      message("Unzipped files are saved in: ", dir_year)
+    }, error = function(e) {
+      warning("Unzip failed (", e$message, "). Keeping ZIP file for manual inspection.")
+    })
   }
   
+  return(invisible(file_name))
 }
 
 # function to automate downloading data via a button that triggers JavaScript (where the download link isn't in the HTML) using chromote
