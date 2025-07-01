@@ -5,81 +5,6 @@ source_code(target_repo = "helper_functions", file_name = "functions.R")
 
 #### PROJECT-SPECIFIC FUNCTIONS ####
 
-merge_timelines_across_columns <- function(data_in = df_in,
-                                           column_vector = "cols_to_merge",
-                                           stem = "new_var", 
-                                           identifier_columns = "id_cols",
-                                           data_out = df_out) {
-  
-  data_out <- data_in %>% 
-    # select columns
-    select(all_of(c(identifier_columns, column_vector))) %>%
-    # replace any NAs with ""
-    mutate(across(all_of(column_vector), ~ifelse(is.na(.), "", .))) %>%
-    # merge information across cols using paste
-    tidyr::unite("tmp", all_of(column_vector), na.rm = TRUE, remove = FALSE, sep = "") %>%
-    # create column that contains tag with information about the column data retained
-    mutate(across(all_of(column_vector), ~ifelse(. != "", deparse(substitute(.)), ""))) %>%
-    tidyr::unite("tag", all_of(column_vector), na.rm = TRUE, remove = TRUE, sep = "") %>%
-    mutate(
-      # replace "" with NA
-      across(c(tmp, tag), ~na_if(., "")),
-      # make new variable numeric
-      tmp = as.numeric(tmp)) %>%
-    # change col names
-    rename_with(~c(stem, paste0(stem, "_tag")), c(tmp, tag)) %>%
-    # merge with data_out
-    full_join(x = data_out, y = ., by = identifier_columns) %>%
-    as.data.frame()
-  
-  return(data_out)
-  
-}
-
-
-merge_staggered_timelines_across_columns <- function(data_in = df_in,
-                                                     column_vector = "cols_to_merge",
-                                                     stem = "new_var", 
-                                                     variable_levels = "new_levels",
-                                                     identifier_columns = "id_cols",
-                                                     data_out = df_out) {
-  
-  # select columns
-  tmp <- data_in[, c(identifier_columns, column_vector)]
-  
-  # determine mapping
-  mapping <- data.frame(old = column_vector,
-                        new = variable_levels)
-  cat("Applied mapping from column_vector to variable_levels:\n\n")
-  print(mapping)
-  
-  tag = paste0(stem, "_tag")
-  
-  # use dplyr
-  tmp <- tmp %>%
-    # apply grouping by identifier variable
-    group_by(.data[[identifier_columns]]) %>%
-    # replace every NA with the unique value observed for each group
-    mutate_at(column_vector, function(x) {ifelse(is.na(x), unique(x[!is.na(x)]), x)}) %>%
-    # remove all duplicated columns
-    distinct(., .keep_all = TRUE) %>%
-    
-    # transform into long format
-    reshape2::melt(id = identifier_columns, variable.name = tag, value.name = stem) %>%
-    # change variable levels
-    mutate(time_period = plyr::mapvalues(get(tag), column_vector, variable_levels, warn_missing = TRUE)) %>%
-    # make numeric
-    mutate_at(c(identifier_columns, "time_period"), ~as.numeric(as.character(.)))
-  
-  
-  # merge with data_out
-  data_out <- merge(data_out, tmp, by = id_cols, all = T)
-  rm(tmp)
-  
-  return(data_out)
-}
-
-
 ### web scraping ###
 
 # Function to identify year of release
@@ -423,7 +348,7 @@ webscrape_government_data <- function(dir_out = "path_to_directory",
     cat("\t", download_links, sep = "\n\t")
     cat("\n")
     # if so, download
-    sapply(download_links, download_data_from_url)
+    invisible(sapply(download_links, download_data_from_url))
   }
   
   # Filter the links using the specified pattern
@@ -449,6 +374,7 @@ webscrape_government_data <- function(dir_out = "path_to_directory",
     for (release_url in release_links) {
       
       # release_url <- release_links[grepl("2017", release_links)]
+      # release_url <- release_links[1]
       
       # get year 
       assign_dir_year("dir_year", file.path(dir_out, get_year(release_url)))
@@ -503,6 +429,82 @@ webscrape_government_data <- function(dir_out = "path_to_directory",
     
   }
   
+}
+
+### data processing ###
+
+merge_timelines_across_columns <- function(data_in = df_in,
+                                           column_vector = "cols_to_merge",
+                                           stem = "new_var", 
+                                           identifier_columns = "id_cols",
+                                           data_out = df_out) {
+  
+  data_out <- data_in %>% 
+    # select columns
+    select(all_of(c(identifier_columns, column_vector))) %>%
+    # replace any NAs with ""
+    mutate(across(all_of(column_vector), ~ifelse(is.na(.), "", .))) %>%
+    # merge information across cols using paste
+    tidyr::unite("tmp", all_of(column_vector), na.rm = TRUE, remove = FALSE, sep = "") %>%
+    # create column that contains tag with information about the column data retained
+    mutate(across(all_of(column_vector), ~ifelse(. != "", deparse(substitute(.)), ""))) %>%
+    tidyr::unite("tag", all_of(column_vector), na.rm = TRUE, remove = TRUE, sep = "") %>%
+    mutate(
+      # replace "" with NA
+      across(c(tmp, tag), ~na_if(., "")),
+      # make new variable numeric
+      tmp = as.numeric(tmp)) %>%
+    # change col names
+    rename_with(~c(stem, paste0(stem, "_tag")), c(tmp, tag)) %>%
+    # merge with data_out
+    full_join(x = data_out, y = ., by = identifier_columns) %>%
+    as.data.frame()
+  
+  return(data_out)
+  
+}
+
+
+merge_staggered_timelines_across_columns <- function(data_in = df_in,
+                                                     column_vector = "cols_to_merge",
+                                                     stem = "new_var", 
+                                                     variable_levels = "new_levels",
+                                                     identifier_columns = "id_cols",
+                                                     data_out = df_out) {
+  
+  # select columns
+  tmp <- data_in[, c(identifier_columns, column_vector)]
+  
+  # determine mapping
+  mapping <- data.frame(old = column_vector,
+                        new = variable_levels)
+  cat("Applied mapping from column_vector to variable_levels:\n\n")
+  print(mapping)
+  
+  tag = paste0(stem, "_tag")
+  
+  # use dplyr
+  tmp <- tmp %>%
+    # apply grouping by identifier variable
+    group_by(.data[[identifier_columns]]) %>%
+    # replace every NA with the unique value observed for each group
+    mutate_at(column_vector, function(x) {ifelse(is.na(x), unique(x[!is.na(x)]), x)}) %>%
+    # remove all duplicated columns
+    distinct(., .keep_all = TRUE) %>%
+    
+    # transform into long format
+    reshape2::melt(id = identifier_columns, variable.name = tag, value.name = stem) %>%
+    # change variable levels
+    mutate(time_period = plyr::mapvalues(get(tag), column_vector, variable_levels, warn_missing = TRUE)) %>%
+    # make numeric
+    mutate_at(c(identifier_columns, "time_period"), ~as.numeric(as.character(.)))
+  
+  
+  # merge with data_out
+  data_out <- merge(data_out, tmp, by = id_cols, all = T)
+  rm(tmp)
+  
+  return(data_out)
 }
 
 # function to fix roundings
