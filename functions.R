@@ -586,6 +586,101 @@ create_urn_df <- function(data, start_year, end_year) {
 }
 
 # urn / laestab lookup function
-lookup_urn_laestab <- function() {
+create_urn_laestab_lookup <- function(data_in = ptr) {
+  
+  # rename columns for consistency
+  if ("urn" %in% names(data_in)) {
+    data_in <- data_in %>%
+      rename(school_urn = urn)  
+  }
+  if ("laestab" %in% names(data_in)) {
+    data_in <- data_in %>%
+      rename(school_laestab = laestab)  
+  }
+  
+  # extract all id pairings #
+  # for each unique school_urn, check if it occurs in the gias
+  # if it does not, then the URN is wrong
+  ids <- data_in %>% 
+    # select columns
+    select(matches("urn|laestab")) %>%
+    # remove duplicated rows
+    filter(!duplicated(.)) %>%
+    # check for each URN if it exists in the identify problematic parings
+    mutate(
+      across(contains("urn"), ~ .x %in% gias$urn_gias, .names = "urn_in_gias")
+    ) %>%
+    # sort data
+    arrange(school_urn) %>%
+    as.data.frame()
+  
+  # create id lookup table for each urn #
+  # df with the following columns:
+  #   urn - correct urn (either same as school urn or replaced with correct urn for that school using urn-laestab mapping with GIAS)
+  #   school_urn - initial urn reported in the data
+  #   laestab - laestab from GIAS
+  #   school - establishment_name from gias
+  id_lookup <- ids %>%
+    # FIX URNs #
+    # add correct urn numbers for urns without a match
+    # mapping between urn and laestab for all incorrect urns
+    # note: urn_gias will only be added if school_urn did not exist in the data, else urn_gias is NA
+    left_join(., 
+              gias[gias$laestab %in% ids$school_laestab[ids$urn_in_gias == F], c("laestab", "urn_gias")],
+              join_by(school_laestab == laestab)
+    ) %>% 
+    mutate(
+      # combine both urn variables into one with the correct URN numbers
+      urn = ifelse(urn_in_gias, school_urn, urn_gias)
+    ) %>%
+    # FIX LAESTABS #
+    left_join(., # get the correct laestab for each urn
+              gias, join_by(urn == urn_gias)) %>%
+    # check if laestabs are correct #
+    mutate(correct_school_laestab = school_laestab == laestab) %>%
+    # select columns
+    select(urn, school_urn, laestab, school) %>%
+    # remove duplicates
+    filter(!duplicated(.)) %>%
+    as.data.frame()
+  
+  return(id_lookup)
+  
+}
+
+cleanup_data <- function(data_in = df) {
+  
+  
+  # create id lookup table for each urn
+  id_lookup <- create_urn_laestab_lookup(data_in = data_in)
+  
+  # transform input data #
+  
+  # get name of dataset
+  dataset_name <- deparse(substitute(data_in))
+  
+  old_name <- "school_urn"
+  new_name <- paste0("urn_", dataset_name)
+  
+  # fix id information in input data
+  data_in <- data_in %>% 
+    # add correct ids
+    full_join(id_lookup, .) %>%
+    # rename column
+    rename(!!new_name := !!old_name) %>%
+    # drop school_name and school_laestab
+    select(-c(school_laestab, school_name)) %>%
+    # sort data
+    arrange(laestab, time_period) %>%
+    # remove schools with more than one entry per year
+    group_by(time_period, urn) %>%
+    mutate(n = n()) %>%
+    ungroup() %>%
+    filter(n == 1) %>%
+    select(-n) %>%
+    as.data.frame()
+  
+  
+  return(data_in)
   
 }
