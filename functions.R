@@ -586,9 +586,10 @@ create_urn_df <- function(data, start_year, end_year) {
 }
 
 # urn / laestab lookup function
-create_urn_laestab_lookup <- function(data_in = ptr) {
+create_urn_laestab_lookup <- function(data_in = df) {
   
   # rename columns for consistency
+  # this assumes that either laestab OR school_laestab are used as column names, NOT both
   if ("urn" %in% names(data_in)) {
     data_in <- data_in %>%
       rename(school_urn = urn)  
@@ -613,6 +614,9 @@ create_urn_laestab_lookup <- function(data_in = ptr) {
     # sort data
     arrange(school_urn) %>%
     as.data.frame()
+  
+  # print information on whether all school urns were correct into console
+  message("Note that ", sum(ids$urn_in_gias == F), " urn(s) out of ", nrow(ids), " were NOT found in GIAS.")
   
   # create id lookup table for each urn #
   # df with the following columns:
