@@ -586,7 +586,14 @@ create_urn_df <- function(data, start_year, end_year) {
 }
 
 # urn / laestab lookup function
-create_urn_laestab_lookup <- function(data_in = df) {
+create_urn_laestab_lookup <- function(data_in = df, original_name = NULL) {
+  
+  # Use provided name or try to get it from substitute
+  if (is.null(original_name)) {
+    dataset_name <- deparse(substitute(data_in))
+  } else {
+    dataset_name <- original_name
+  }
   
   # rename columns for consistency
   # this assumes that either laestab OR school_laestab are used as column names, NOT both
@@ -598,6 +605,9 @@ create_urn_laestab_lookup <- function(data_in = df) {
     data_in <- data_in %>%
       rename(school_laestab = laestab)  
   }
+  
+  # Export the modified data to global environment
+  assign(dataset_name, data_in, envir = .GlobalEnv)
   
   # extract all id pairings #
   # for each unique school_urn, check if it occurs in the gias
@@ -648,23 +658,28 @@ create_urn_laestab_lookup <- function(data_in = df) {
     filter(!duplicated(.)) %>%
     as.data.frame()
   
-  return(id_lookup)
-  
+  # Return both the lookup and the modified data
+  return(list(
+    lookup = id_lookup,
+    modified_data = data_in
+  ))
 }
 
 cleanup_data <- function(data_in = df) {
   
+  # Get the original dataset name
+  original_dataset_name <- deparse(substitute(data_in))
   
-  # create id lookup table for each urn
-  id_lookup <- create_urn_laestab_lookup(data_in = data_in)
+  # create id lookup table for each urn, passing the original name
+  result <- create_urn_laestab_lookup(data_in = data_in, 
+                                      original_name = original_dataset_name)
   
-  # transform input data #
-  
-  # get name of dataset
-  dataset_name <- deparse(substitute(data_in))
+  # Extract both the lookup and the modified data
+  id_lookup <- result$lookup
+  data_in <- result$modified_data  # This has the renamed columns!
   
   old_name <- "school_urn"
-  new_name <- paste0("urn_", dataset_name)
+  new_name <- paste0("urn_", original_dataset_name)
   
   # fix id information in input data
   data_in <- data_in %>% 
@@ -684,9 +699,7 @@ cleanup_data <- function(data_in = df) {
     select(-n) %>%
     as.data.frame()
   
-  
   return(data_in)
-  
 }
 
 # Function to review column lookup table mappings
