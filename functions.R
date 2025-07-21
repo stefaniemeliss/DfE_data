@@ -688,7 +688,7 @@ cleanup_data <- function(data_in = df) {
     # rename column
     rename(!!new_name := !!old_name) %>%
     # drop school_name and school_laestab
-    select(-c(school_laestab, school_name)) %>%
+    select(-c(school_laestab)) %>%
     # sort data
     arrange(laestab, time_period) %>%
     # remove schools with more than one entry per year
@@ -698,6 +698,10 @@ cleanup_data <- function(data_in = df) {
     filter(n == 1) %>%
     select(-n) %>%
     as.data.frame()
+  
+  if ("school_name" %in% names(data_in)) {
+    data_in$school_name <- NULL
+  }
   
   return(data_in)
 }
