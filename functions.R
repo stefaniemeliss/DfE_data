@@ -408,7 +408,7 @@ webscrape_government_data <- function(dir_out = "path_to_directory",
         })
         
         # Filter the download links (e.g., links ending with .pdf)
-        download_links <- absolute_links[grepl("\\.[a-zA-Z]+$|/files$", absolute_links)]
+        download_links <- absolute_links[grepl("\\.[a-zA-Z]+$|/files/", absolute_links)]
         download_links <- download_links[!grepl(".uk$", download_links)]
         download_links <- unique(download_links)
         
@@ -527,7 +527,7 @@ fix_roundings <- function(var_nrd = "variable_not_rounded", var_rd = "variable_r
   tmp$rd <- round(tmp[, var_nrd] / rounding_factor) * rounding_factor
   
   # replace any instances of rounded values with unrounded values
-  tmp$test <- ifelse(tmp[, var_nrd] != 0 & tmp[, col_to_filter] %in% filter, tmp[, var_nrd], tmp[, var_rd])
+  tmp$test <- ifelse(!is.na(tmp[, var_nrd]) & tmp[, var_nrd] != 0 & tmp[, col_to_filter] %in% filter, tmp[, var_nrd], tmp[, var_rd])
   
   # compute diff after replacing rounded values with unrounded values
   tmp$diff2 <- tmp[, var_nrd] - tmp$test
