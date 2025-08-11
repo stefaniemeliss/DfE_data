@@ -139,6 +139,15 @@ webscrape_government_data(dir_out =  file.path(dir_data, "school-pupils-and-thei
                           pattern_to_match = glob2rx("*school-pupils-and-their-characteristics/20*|*schools-pupils*20*"))
 
 
+##### Special educational needs in England ##### 
+
+# run all setups (reset environment)
+setup_environment()
+
+# download data
+webscrape_government_data(dir_out =  file.path(dir_data, "special-educational-needs-in-england"),
+                          parent_url = "https://explore-education-statistics.service.gov.uk/find-statistics/special-educational-needs-in-england",
+                          pattern_to_match = glob2rx("*special-educational-needs-in-england/20*|*special-educational-needs-in-england-january-20**"))
 
 
 ##### Performance tables #####
