@@ -177,6 +177,30 @@ vac <- vac[, !grepl("code|type", names(vac))]
 vac <- cleanup_data(data_in = vac)
 
 
+# Teacher turnover - school level #
+
+tto <- read.csv(file.path(dir_in, "2024", "data", "teacher_turnover_2010_2024_sch.csv"))
+
+# fix variable names
+names(tto) <- c("time_period", "time_identifier", "geographic_level", "country_code", "country_name",
+                "school_urn", "school_laestab", "school_name", "school_type", 
+                "teacher_fte_in_census_year", "remained_in_the_same_school", "left_the_state_funded_system", "left_to_another_state_funded_school")
+
+tto <- tto %>%
+  # rename columns 
+  rename_with(., ~tolower(gsub("X...", "", ., fixed = T))) %>% 
+  # remove columns that are uninformative
+  select(where(~length(unique(na.omit(.x))) > 1)) %>%
+  # compute percentage retained
+  mutate(retention_rate = remained_in_the_same_school / teacher_fte_in_census_year * 100) %>%
+  # drop columns
+  # select(-c(school_type, teacher_fte_in_census_year, remained_in_the_same_school, left_the_state.funded_system, left_to_another_state.funded_school)) %>%
+  select(-c(school_type)) %>%
+  as.data.frame()
+  
+# check urns and clean up data
+tto <- cleanup_data(data_in = tto)
+
 
 # Size of the school workforce - school level #
 
@@ -252,6 +276,7 @@ for (f in 1:length(files)) {
 
 # check urns and clean up data
 id_lookup <- create_urn_laestab_lookup(data_in = teach_char)
+id_lookup <- id_lookup$lookup
 
 # fix id information in input data
 teach_char <- teach_char %>% 
@@ -524,6 +549,7 @@ df <- swf %>%
   full_join(., pay, by = id_cols) %>% 
   full_join(., vac, by = id_cols) %>%
   full_join(., abs, by = id_cols) %>%
+  full_join(., tto, by = id_cols) %>%
   # replace with NAs
   mutate(
     # replace spaces and %
@@ -545,6 +571,51 @@ df <- swf %>%
   # sort data
   arrange(laestab, time_period) %>% as.data.frame()
 
+# CHECK FTE IN TEACHER TURNOVER #
+
+check <- df[, grepl("urn|time_period|fte|left|remain", names(df))]
+check <- check[, grepl("urn|time_period|teach|left|remain", names(check))]
+check <- check[, !grepl("urn_|assistants|grade", names(check))]
+
+# fte_all_teachers              FTE of all teachers (Filename: workforce_2010_2024_fte_hc_nat_reg_la_sch.csv)
+# fte_classroom_teachers        FTE of classroom teachers (Filename: workforce_2010_2024_fte_hc_nat_reg_la_sch.csv)
+# fte_leadership_teachers       FTE of leadership teachers (Filename: workforce_2010_2024_fte_hc_nat_reg_la_sch.csv)
+# fte_head_teachers             FTE of head teachers (Filename: workforce_2010_2024_fte_hc_nat_reg_la_sch.csv)
+# fte_deputy_head_teachers      FTE of deputy teachers (Filename: workforce_2010_2024_fte_hc_nat_reg_la_sch.csv)
+# fte_assistant_head_teachers   FTE of assistant head teachers (Filename: workforce_2010_2024_fte_hc_nat_reg_la_sch.csv)
+# fte_all_teachers_without_qts  FTE of all teachers without qualified teacher status (Filename: workforce_2010_2024_fte_hc_nat_reg_la_sch.csv)
+# fte_leadership_non_teachers   FTE of leadership non-teachers (Filename: workforce_2010_2024_fte_hc_nat_reg_la_sch.csv)
+# qualified_teachers_fte        Number of FTE qualified teachers (Filename: workforce_ptrs_2010_2024_nat_reg_la.csv)
+# teachers_fte                  Number of FTE teachers (Filename: workforce_ptrs_2010_2024_nat_reg_la.csv)
+# teacher_fte_in_census_year    FTE number of teachers in the census year (Filename: teacher_turnover_2010_2024_sch.csv)
+
+# fte_all_teachers = fte_classroom_teachers + fte_leadership_teachers
+check$fte_all_teachers_RECALC <- check$fte_classroom_teachers + check$fte_leadership_teachers
+check$diff_fte_all_teachers <- check$fte_all_teachers - check$fte_all_teachers_RECALC
+
+# fte_leadership_teachers = fte_head_teachers + fte_deputy_head_teachers + fte_assistant_head_teachers
+check$fte_leadership_teachers_RECALC <- check$fte_head_teachers + check$fte_deputy_head_teachers + check$fte_assistant_head_teachers
+check$diff_fte_leadership_teachers <- check$fte_leadership_teachers - check$fte_leadership_teachers_RECALC
+
+# is fte_all_teachers equal to teachers_fte?
+check$diff_fte_teach_ptr <- round(check$fte_all_teachers - check$teachers_fte, 2)
+sum(check$diff_fte_teach_ptr != 0, na.rm = T) # fte_all_teachers is equal to teachers_fte in all but 7 instances
+
+
+# teacher_fte_in_census_year = remained_in_the_same_school + left_the_state_funded_system + left_to_another_state_funded_school
+check$teacher_fte_in_census_year_RECALC <- check$remained_in_the_same_school + check$left_the_state_funded_system + check$left_to_another_state_funded_school
+check$diff_teacher_fte_in_census_year <- check$teacher_fte_in_census_year - check$teacher_fte_in_census_year_RECALC
+sum(check$diff_teacher_fte_in_census_year != 0, na.rm = T) # fte_all_teachers is NOT equal to teacher_fte_in_census_year in 172871 instances
+sum(check$diff_teacher_fte_in_census_year != 0, na.rm = T)/nrow(check) # fte_all_teachers is NOT equal to teacher_fte_in_census_year roughly half of the data
+psych::describeBy(check$diff_teacher_fte_in_census_year, group = check$time_period)
+
+
+# is fte_all_teachers equal to teacher_fte_in_census_year?
+check$diff_fte_teach_tto <- round(check$fte_all_teachers - check$teacher_fte_in_census_year, 2)
+sum(check$diff_fte_teach_tto != 0, na.rm = T) # fte_all_teachers is NOT equal to teacher_fte_in_census_year in 172871 instances
+sum(check$diff_fte_teach_tto != 0, na.rm = T)/nrow(check) # fte_all_teachers is NOT equal to teacher_fte_in_census_year roughly half of the data
+psych::describe(check$diff_fte_teach_tto)
+psych::describeBy(check$diff_fte_teach_tto, group = check$time_period)
 
 # save data
 data.table::fwrite(df, file = file.path(dir_data, "data_swf.csv"), row.names = F)
