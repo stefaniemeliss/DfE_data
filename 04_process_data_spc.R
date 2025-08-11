@@ -163,11 +163,14 @@ column_lookup_pupils <- tibble(
     "num_pup_ks3",
     "num_pup_ks4", 
     "num_pup_ks5",
-
+    
     # Free School Meals (numbers only, no percentages)  
     "num_pup_fsm",
+    "perc_pup_fsm",
+    "num_pup_tot_fsm_calc", # only avail from 2010/11 to 2012/13
     "num_pup_fsm_performance_tables",
-    "num_pup_used_for_fsm_calculation_in_performance_tables",
+    "perc_pup_fsm_performance_tables",
+    "num_pup_tot_fsm_calc_performance_tables",
     
     # Language (numbers only)
     "num_pup_efl",
@@ -222,7 +225,7 @@ column_lookup_pupils <- tibble(
     
     # Key Stage and Year Group Measures (NEW ADDITIONS - appear 2018-2025)
     c("number_of_early_year_pupils_(years_e1_and_e2)", "number_of_early_year_pupils__years_e1_and_e2_"),
-    c("number_of_nursery_pupils_(years_n1_and_n2)", "number_of_nursery_pupils__years_n1_and_n2_"),
+    c("number_of_nursery_pupils_(years_n1_and_n2)", "number_of_nursery_pupils__years_n1_and_n2_"), # Number of nursery pupils (years N1 and N2)
     c("number_of_reception_pupils_(year_r)", "number_of_reception_pupils__year_r_"),
     c("number_of_key_stage_1_pupils_(years_1_and_2)", "number_of_key_stage_1_pupils__years_1_and_2_"),
     c("number_of_key_stage_2_pupils_(years_3_to_6)", "number_of_key_stage_2_pupils__years_3_to_6_"),
@@ -233,10 +236,12 @@ column_lookup_pupils <- tibble(
     # Free School Meals - multiple variations (numbers only)
     c("number_of_pupils_known_to_be_eligible_for_free_school_meals", 
       "number_of_pupils_known_to_be_eligible_for_and_claiming_free_school_meals"),
+    c("%_of_pupils_known_to_be_eligible_for_free_school_meals", 
+      "%_of_pupils_known_to_be_eligible_for_and_claiming_free_school_meals"),
+    c("number_of_pupils_(used_for_fsm_calculation)"),
     c("number_of_pupils_known_to_be_eligible_for_free_school_meals_(performance_tables)"),
-    # UNIFIED: Both FSM calculation variations map to same standard name
-    c("number_of_pupils_(used_for_fsm_calculation_in_performance_tables)",
-      "number_of_pupils_(used_for_fsm_calculation)"),
+    c("%_of_pupils_known_to_be_eligible_for_free_school_meals_(performance_tables)"),
+    c("number_of_pupils_(used_for_fsm_calculation_in_performance_tables)"),
     
     # Language (numbers only)
     c("number_of_pupils_whose_first_language_is_known_or_believed_to_be_english"),
@@ -349,6 +354,9 @@ ud_stan_p <- lapply(ud_all_p, function(df) {
 # Combine all datasets using bind_rows
 ud_pupils <- bind_rows(ud_stan_p, .id = "academic_year")
 
+# check that no column is missing
+column_lookup_pupils$standard_name[! column_lookup_pupils$standard_name %in% names(ud_pupils)]
+
 # re-order columns
 ud_pupils <- ud_pupils[, column_lookup_pupils$standard_name]
 
@@ -372,9 +380,9 @@ cat("Years:", paste(sort(unique(ud_pupils$time_period)), collapse = ", "), "\n")
 year_counts <- table(ud_pupils$time_period)
 print(year_counts)
 
-# fill in number of boys/girls for all single sex schools
-ud_pupils$num_pup_boys <- ifelse(is.na(ud_pupils$num_pup_boys) & !is.na(ud_pupils$num_pup_girls), 0, ud_pupils$num_pup_boys)
-ud_pupils$num_pup_girls <- ifelse(is.na(ud_pupils$num_pup_girls) & !is.na(ud_pupils$num_pup_boys), 0, ud_pupils$num_pup_girls)
+# # fill in number of boys/girls for all single sex schools
+# ud_pupils$num_pup_boys <- ifelse(is.na(ud_pupils$num_pup_boys) & !is.na(ud_pupils$num_pup_girls), 0, ud_pupils$num_pup_boys)
+# ud_pupils$num_pup_girls <- ifelse(is.na(ud_pupils$num_pup_girls) & !is.na(ud_pupils$num_pup_boys), 0, ud_pupils$num_pup_girls)
 
 # sum up pupil ethnicity #
 
@@ -400,6 +408,84 @@ ud_pupils[, new_col] <- ifelse(ud_pupils$na_count == max(ud_pupils$na_count), NA
 ud_pupils[, grepl("ethn_mixed_", names(ud_pupils))] <- NULL
 
 ud_pupils$na_count <- NULL
+
+# check FSM numbers #
+
+# create df with fsm relevant data only
+check <- ud_pupils[, grepl("urn|time|fsm|tot", names(ud_pupils))]
+
+# check data availability by year
+check %>% group_by(time_period) %>%
+  summarise(
+    rows = sum(!is.na(urn_ud_pupils)),
+    
+    num_pup_fsm = sum(is.na(num_pup_fsm)),
+    perc_pup_fsm = sum(is.na(perc_pup_fsm)),
+    num_pup_tot_fsm_calc = sum(is.na(num_pup_tot_fsm_calc)),
+    num_pup_fsm_performance_tables = sum(is.na(num_pup_fsm_performance_tables)),
+    perc_pup_fsm_performance_tables = sum(is.na(perc_pup_fsm_performance_tables)),
+    num_pup_tot_fsm_calc_performance_tables = sum(is.na(num_pup_tot_fsm_calc_performance_tables))
+  )
+
+# num/perc pupils eligible for FSM #
+# available for all years
+# if num is known, perc is known
+# but total number of pupils used for the FSM calc only available between 2010/11 - 2012/13
+# because the total number used in the calculations is not known, we cannot recompute the percentages with more precision for all years
+
+# methodology change for reporting the percentage of pupils known to be eligible for FSM in the SPC data release #
+
+# Up to and including the 2012/13 academic year, the DfE included a variable in the underlying school-level data called ‘number of pupils (used for FSM calculation)’.
+# From 2013/14 onwards, this variable no longer appears, and the published percentage of pupils eligible for FSM is calculated using the total headcount of pupils.
+# NOTE: More temporally consistent measure of perc pup FSM should use total number of pupils as denominator throughout!! 
+
+# Pre 2012/13:
+# The FSM percentage was calculated using a specific denominator: the ‘number of pupils (used for FSM calculation)’.
+# This denominator excluded some pupils who were not eligible for FSM by definition or for whom FSM status was not collected. e.g., pupils in nursery classes, some post-16 pupils
+# FSM percentage reflected the proportion of eligible pupils among only those for whom FSM eligibility was assessed.
+
+# Post 2012/13:
+# The DfE switched to using the total headcount of pupils as the denominator for FSM calculations.
+# This means the FSM percentage now reflects the proportion of eligible pupils among all pupils on roll, regardless of whether FSM status was collected for every pupil.
+# This change aligned the calculation with other headline measures and simplified reporting, but it may have slightly altered the FSM percentage, particularly in schools with large numbers of pupils in nursery or post-16 provision.
+
+# re-calculate perc of pupils eligible for FSM
+check$perc_pup_fsm_RECALC <- ifelse(check$time_period %in% c(201011, 201112, 201213), round(check$num_pup_fsm / check$num_pup_tot_fsm_calc * 100, 1),
+                                    round(check$num_pup_fsm / check$num_pup_total * 100, 1))
+# compute difference
+check$diff_perc_pup_fsm <- check$perc_pup_fsm - check$perc_pup_fsm_RECALC
+
+# check descriptives of diff
+psych::describe(check$diff_perc_pup_fsm)
+
+
+# num/perc pupils eligible for FSM (performance tables) #
+
+# re-calculate perc of pupils eligible for FSM (performance tables)
+check$perc_pup_fsm_performance_tables_RECALC <- round(check$num_pup_fsm_performance_tables / check$num_pup_tot_fsm_calc_performance_tables * 100, 1)
+
+# compute difference
+check$diff_perc_pup_fsm_performance_tables <- check$perc_pup_fsm_performance_tables - check$perc_pup_fsm_performance_tables_RECALC
+
+# check descriptives of diff
+psych::describe(check$diff_perc_pup_fsm_performance_tables)
+
+# Compare FSM numbers in SPC vs performance tables #
+
+# FSM (census): Includes all pupils on roll, including nursery and post-16.
+# FSM (performance tables): Only includes pupils in ‘eligible year groups’ (reception to year 11, or 1 to 11 in special schools).
+
+# count
+check$diff_num_pup_fsm <- check$num_pup_fsm - check$num_pup_fsm_performance_tables
+psych::describeBy(check$diff_num_pup_fsm, group = check$time_period)
+
+# percentage
+check$diff_perc_pup_fsm <- check$perc_pup_fsm - check$perc_pup_fsm_performance_tables
+psych::describeBy(check$diff_perc_pup_fsm, group = check$time_period)
+
+
+
+  
 # class size #
 
 # list data files
