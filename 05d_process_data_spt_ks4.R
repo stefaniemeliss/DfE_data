@@ -848,10 +848,10 @@ print(year_counts)
 
 # gender
 
-# fill in number of boys/girls for all single sex schools
-ks4$num_ks4_boys <- ifelse(is.na(ks4$num_ks4_boys) & !is.na(ks4$num_ks4_girls), 0, ks4$num_ks4_boys)
-ks4$num_ks4_girls <- ifelse(is.na(ks4$num_ks4_girls) & !is.na(ks4$num_ks4_boys), 0, ks4$num_ks4_girls)
-sum(ks4$num_ks4_boys + ks4$num_ks4_girls != ks4$num_ks4, na.rm = T)
+# # fill in number of boys/girls for all single sex schools
+# ks4$num_ks4_boys <- ifelse(is.na(ks4$num_ks4_boys) & !is.na(ks4$num_ks4_girls), 0, ks4$num_ks4_boys)
+# ks4$num_ks4_girls <- ifelse(is.na(ks4$num_ks4_girls) & !is.na(ks4$num_ks4_boys), 0, ks4$num_ks4_girls)
+# sum(ks4$num_ks4_boys + ks4$num_ks4_girls != ks4$num_ks4, na.rm = T)
 
 # Percentage of eligible boys/girls missing in 2010/11, recompute
 ks4$perc_ks4_boys <- ifelse(is.na(ks4$perc_ks4_boys),
