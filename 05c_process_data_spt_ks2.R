@@ -1028,9 +1028,9 @@ print(year_counts)
 
 #### FURTHER MODIFY DATA ####
 
-# fill in number of boys/girls for all single sex schools
-ks4$num_ks4_boys <- ifelse(is.na(ks4$num_ks4_boys) & !is.na(ks4$num_ks4_girls), 0, ks4$num_ks4_boys)
-ks4$num_ks4_girls <- ifelse(is.na(ks4$num_ks4_girls) & !is.na(ks4$num_ks4_boys), 0, ks4$num_ks4_girls)
+# # fill in number of boys/girls for all single sex schools
+# ks2$num_ks2_boys <- ifelse(is.na(ks2$num_ks2_boys) & !is.na(ks2$num_ks2_girls), 0, ks2$num_ks2_boys)
+# ks2$num_ks2_girls <- ifelse(is.na(ks2$num_ks2_girls) & !is.na(ks2$num_ks2_boys), 0, ks2$num_ks2_girls)
 
 # Percentage of eligible boys/girls missing in 2010/11, recompute
 ks2$perc_ks2_boys <- ifelse(is.na(ks2$perc_ks2_boys), 
@@ -1056,11 +1056,11 @@ for (i in 1:length(levels)) {
 
 # re-order and drop columns
 ks2 <- ks2 %>% 
-  relocate(any_of(c(paste0("num_ks2_sen_", levels), paste0("perc_ks2_sen_", levels))), .after = perc_ks2_boys) %>%
+  relocate(any_of(c(paste0("num_ks2_sen_", levels), paste0("perc_ks2_sen_", levels))), .after = perc_ks2_girls) %>%
   arrange(laestab, time_period)
 
 # delete more granular SEN data
-levels <- c("a", "ap", "st", "k", "e", "aps")
+levels <- c("a", "ap", "st", "k", "e", "aps", "ek", "se", "apk")
 ks2[, paste0("num_ks2_sen_", levels)] <- NULL
 ks2[, paste0("perc_ks2_sen_", levels)] <- NULL
 
