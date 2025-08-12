@@ -99,6 +99,12 @@ gias <- gias[!is.na(gias$laestab), ]
 gias <- gias[!duplicated(gias), c("laestab", "urn", "establishmentname")]
 names(gias) <- c("laestab", "urn_gias", "school")
 
+# # SPC 2019 data
+# spc <- fread(file.path(dir_data, "data_spc_pupils.csv")) # census data collected in January of academic year - Spring census
+# spc <- as.data.frame(spc)
+# 
+# # get total number of pupils for 2019/20
+# spc <- spc[spc$time_period == 201920, c("urn", "num_pup_total")]
 
 # Best Practice for Matching Inconsistent Column Names Across Years
 
@@ -162,51 +168,48 @@ column_lookup_census <- tibble(
     # Basic identifiers - handle structural changes
     "urn", "laestab", "la", "estab", "time_period",
     
-    # Pupil roll counts - numbers only
-    "num_pup_tot", "num_pup_girls", "num_pup_boys", 
-
-    # # Gender percentages
-    # "perc_pup_girls", "perc_pup_boys",
+    # Pupil roll counts
+    "num_pup_tot", 
+    "num_pup_girls", 
+    "perc_pup_girls",
+    "num_pup_boys", 
+    "perc_pup_boys",
     
     # ===== SEN MEASURES =====
     # Old system pre-2014/15
     "num_pup_sen_a", 
+    "perc_pup_sen_a",              # School Action (2010/11 - 2017/18)
     "num_pup_sen_ap", 
+    "perc_pup_sen_ap",            # School Action Plus (2010/11 - 2017/18)
     "num_pup_sen_aps", 
+    "perc_pup_sen_aps",  # School Action Plus or Statement (2010/11 - 2014/15)
     "num_pup_sen_st", 
+    "perc_pup_sen_st",        # Statement (2010/11 - 2017/18)
     
     # New system 2014-15plus
     "num_pup_sen_k", 
-    "num_pup_sen_e", 
-    
-    "perc_pup_sen_a",              # School Action (2010/11 - 2017/18)
-    "perc_pup_sen_ap",            # School Action Plus (2010/11 - 2017/18)
-    "perc_pup_sen_aps",  # School Action Plus or Statement (2010/11 - 2014/15)
-    "perc_pup_sen_st",        # Statement (2010/11 - 2017/18)
-    
     "perc_pup_sen_k",          # SEN Support (2014/15 - 2023/24)
+    "num_pup_sen_e", 
     "perc_pup_sen_e",            # EHC Plan (2014/15 - 2023/24)
     
-    # Language measures - numbers
-    "num_pup_eal",
+    # Language measures
     "num_pup_efl",
+    "perc_pup_efl",
+    "num_pup_eal",
+    "perc_pup_eal",
     "num_pup_ufl",
-    # "num_pup_used_for_eal_calculation", 
+    "perc_pup_ufl",
+
+    # Language measures
     
-    # # Language measures - percentages
-    # "perc_pup_eal",
-    # "perc_pup_efl", 
-    # "perc_pup_ufl",
-    
-    # Free School Meals measures - numbers
-    "num_pup_fsm",
+    # Free School Meals measures
+    "num_pup_fsm", # not in 2014/15 to 2017/18 and 2019/20 
+    "perc_pup_fsm",  # only avail from 2010/11 to 2017/18
+    "num_pup_tot_fsm_calc", # only avail from 2010/11 to 2013/14
     "num_pup_fsm6",
-    "num_pup_used_for_fsm_calculation",
-    "num_pup_used_for_fsm6_calculation",
+    "perc_pup_fsm6", # MISSING for 2019/20 --> FOI request
+    "num_pup_tot_fsm6_calc" # only available 2021/22 onwards
     
-    # Free School Meals measures - percentages
-    "perc_pup_fsm",
-    "perc_pup_fsm6"
   ),
   
   # All possible variations for each standard name - in matching order
@@ -219,55 +222,89 @@ column_lookup_census <- tibble(
     c("time_period"),
     
     # Pupil roll counts
-    c("totpupsendn", "nor"),
-    c("norg"),
+    c("totpupsendn", "nor", "num_pup_total"),
     c("norb"),
-
-    # # Gender percentages
-    # c("pnorg"),
-    # c("pnorb"),
+    c("pnorb"),
+    c("norg"),
+    c("pnorg"),
     
-    # SEN measures - CORRECTED ORDER (old system) - numbers
+    # ===== SEN MEASURES =====
+    
+    # Pre-2014 SEN system:
+    #   - School Action (lowest level, reported as tsena)
+    #   - School Action Plus (additional external support, reported as totsenap)
+    #   - Statement of SEN (highest level, reported as totsenst)
+    #
+    # 2010/11 to 2013/14:
+    #   tsensap: Number of pupils with SEN statement or on School Action Plus
+    #            (groups the two highest levels, as was common in analysis at the time)
+    #   totsenst: Total pupils with SEN statement
+    #   totsenap: Total pupils at School Action Plus
+    #   tsena: Number of pupils on roll with SEN on School Action
+    #
+    # Transition year:
+    #   Statements were being replaced by EHC plans (from September 2014).
+    #   School Action and School Action Plus were replaced by SEN Support.
+    #
+    # 2014/15:
+    #   tsenelse: Number of SEN pupils with a statement or EHC plan (reflects the introduction of EHC plans)
+    #   tsenelk: Number of eligible pupils with SEN support (reflects the new post-2014 support level)
+    #
+    # Bedding-in of the new system:
+    #   Statements were being phased out, EHC plans phased in.
+    #   SEN Support replaced School Action/Plus.
+    #
+    # 2015/16 to 2017/18:
+    #   tsenelse: Number of SEN pupils with a statement or EHC plan (combines both statement and EHC plan as the highest level)
+    #   tsenelk: Number of eligible pupils with SEN support (lower level of support)
+    #
+    # 2018/19 onwards:
+    #   tsenelse: Number of SEN pupils with an EHC plan (statements fully replaced by EHC plans)
+    #   tsenelk: Number of eligible pupils with SEN support (without an EHC plan)
+    #
+    # ===== Summary Table =====
+    # Years              Highest level                Middle/Lower level            Grouped variables
+    # 2010/11–2013/14    totsenst                     totsenap, tsena               tsensap (statement or SAP)
+    # 2014/15            tsenelse                     tsenelk                       (no grouped variable; transition to new system)
+    # 2015/16–2017/18    tsenelse                     tsenelk
+    # 2018/19 onwards    tsenelse (EHC plan only)     tsenelk (SEN support)
+    
+    
+    # SEN measures - CORRECTED ORDER (old system)
     c("tsena"),      # School Action (first in hierarchy)
-    c("totsenap"),   # School Action Plus (second in hierarchy)
-    c("tsensap"),    # Combined: Statement or School Action Plus
-    c("totsenst"),   # Statement (third in hierarchy)
-    
-    # SEN measures - new system - numbers
-    c("tsenelk"),    # SEN support
-    c("tsenelse"),   # EHC plan
-    
-    # SEN measures - CORRECTED ORDER (old system) - percentages
     c("psena"),      # % School Action
+    c("totsenap"),   # School Action Plus (second in hierarchy)
     c("ptotsenap"),  # % School Action Plus
+    c("tsensap"),    # Combined: Statement or School Action Plus
     c("psensap"),    # % Statement or School Action Plus
+    c("totsenst"),   # Statement (third in hierarchy)
     c("ptotsenst"),  # % Statement
     
-    # SEN measures - new system - percentages
+    # SEN measures - new system
+    c("tsenelk"),    # SEN support
     c("psenelk"),    # % SEN support
+    c("tsenelse"),   # EHC plan
     c("psenelse"),   # % EHC plan
     
-    # Language measures - numbers
-    c("numeal"),
+    # Language measures
     c("numengfl"),
+    c("pnumengfl"),
+    c("numeal"),
+    c("pnumeal"),
     c("numuncfl"),
+    c("pnumuncfl", "pnumunclf"),
     # c("totpupealdn"),
     
-    # # Language measures - percentages
-    # c("pnumeal"),
-    # c("pnumengfl"),
-    # c("pnumuncfl", "pnumunclf"),
+    # Language measures
     
-    # Free School Meals measures - numbers
+    # Free School Meals measures
     c("numfsm"),
-    c("numfsmever", "fsm6"),
-    c("totpupfsmdn"),
-    c("norfsmever"),
-    
-    # Free School Meals measures - percentages
     c("pnumfsm"),
-    c("pnumfsmever")
-  )
+    c("totpupfsmdn"),
+    c("numfsmever", "fsm6"),
+    c("pnumfsmever"),
+    c("norfsmever")
+      )
 )
 
 # Run the review of the column name lookup
@@ -280,7 +317,6 @@ reverse_lookup_census <- create_reverse_lookup(column_lookup_census)
 df_all <- list()
 
 # LOOP OVER ALL YEARS 
-sink("check.txt")
 for (i in seq_along(start:finish)) {
   
   year = c(start:finish)[i]  
@@ -297,6 +333,9 @@ for (i in seq_along(start:finish)) {
     # read in census data
     file = file.path(dir_misc, "FOI_2025-0008906_SMeliss_FSM6_Final.xlsx")
     tmp <- xlsx::read.xlsx(file = file, sheetIndex = 1, startRow = 3)
+    
+    # # add pupil count for 2019/20
+    # tmp <- merge(tmp, spc, by = "urn", all.x = T)
     
   } else {
     
@@ -353,7 +392,6 @@ for (i in seq_along(start:finish)) {
   rm(tmp)
   
 }
-sink()
 
 # **BIND ALL DATASETS TOGETHER**
 # Get all unique column names across all datasets
@@ -415,93 +453,93 @@ census <- census %>%
   relocate(time_period, school, laestab, urn) %>%
   arrange(laestab, time_period)
 
-# fill in number of boys/girls for all single sex schools
-census$num_pup_boys <- ifelse(is.na(census$num_pup_boys) & !is.na(census$num_pup_girls), 0, census$num_pup_boys)
-census$num_pup_girls <- ifelse(is.na(census$num_pup_girls) & !is.na(census$num_pup_boys), 0, census$num_pup_girls)
+# FSM data #
 
-# Re-compute percentages
+# create df with fsm relevant data only
+check <- census[, grepl("urn|time|fsm|tot", names(census))]
+check$num_pup_sen_tot <- NULL
 
-denominator <- "num_pup_tot"
+# check data availability by year
+check %>% group_by(time_period) %>%
+  summarise(
+    rows = sum(!is.na(urn_census)),
+    
+    num_pup_fsm = sum(is.na(num_pup_fsm)),
+    perc_pup_fsm = sum(is.na(perc_pup_fsm)),
+    num_pup_tot_fsm_calc = sum(is.na(num_pup_tot_fsm_calc)),    
+    num_pup_fsm6 = sum(is.na(num_pup_fsm6)),
+    perc_pup_fsm6 = sum(is.na(perc_pup_fsm6)),
+    num_pup_tot_fsm6_calc = sum(is.na(num_pup_tot_fsm6_calc))
+  )
 
-# # Gender percentages 
-# numerator <- "num_pup_girls"
-# quotient <- "perc_pup_girls" 
-# census[, quotient] <- census[, numerator] / census[, denominator] * 100
-# 
-# numerator <- "num_pup_boys"
-# quotient <- "perc_pup_boys" 
-# census[, quotient] <- census[, numerator] / census[, denominator] * 100
+# re-calculate perc of pupils eligible for FSM
+check$perc_pup_fsm_RECALC <- ifelse(check$time_period %in% c(201011, 201112, 201213), round(check$num_pup_fsm / check$num_pup_tot_fsm_calc * 100, 1),
+                                    round(check$num_pup_fsm / check$num_pup_tot * 100, 1))
 
-# SEN measures
+# compute difference
+check$diff_perc_pup_fsm <- check$perc_pup_fsm - check$perc_pup_fsm_RECALC
+
+# check descriptives of diff
+psych::describe(check$diff_perc_pup_fsm)
+
+
+# SEN measures #
+
+# compute number of NA obs per school per year
+census$na_count <- apply(census[, grepl("num_pup_sen", names(census))], 1, function(row) sum(is.na(row)))
+census$zero_count <- apply(census[, grepl("num_pup_sen", names(census))], 1, function(row) sum(row == 0, na.rm = T))
+census$missing_count <- census$na_count + census$zero_count
+
 
 # compute totals
-census$num_pup_sen_tot <- rowSums(census[, c("num_pup_sen_a", "num_pup_sen_ap", "num_pup_sen_st", "num_pup_sen_k", "num_pup_sen_e")], na.rm = T)
-census$num_pup_sen_high <- rowSums(census[, c("num_pup_sen_st", "num_pup_sen_e")], na.rm = T)
-census$num_pup_sen_lower <- rowSums(census[, c("num_pup_sen_a", "num_pup_sen_ap", "num_pup_sen_k")], na.rm = T)
+
+# populate num_pup_sen_aps
+# num_pup_sen_aps = num_pup_sen_ap + num_pup_sen_st
+# pupils with statement or on school action plus
+census$num_pup_sen_aps <- ifelse(census$time_period %in% c(201011, 201112, 201213, 201314) & is.na(census$num_pup_sen_aps), 
+                                 rowSums(census[, c("num_pup_sen_ap", "num_pup_sen_st")], na.rm = T), census$num_pup_sen_aps)
+
+# deduct pupils on school action plus where possible
+census$num_pup_sen_ap <- ifelse(census$time_period %in% c(201011, 201213, 201314) & is.na(census$num_pup_sen_ap) & !is.na(census$num_pup_sen_aps) & !is.na(census$num_pup_sen_st), 
+                                 census$num_pup_sen_aps - census$num_pup_sen_st, census$num_pup_sen_ap)
+
+
+# deduct pupils with statement where possible
+census$num_pup_sen_st <- ifelse(census$time_period %in% c(201011, 201213, 201314) & is.na(census$num_pup_sen_st) & !is.na(census$num_pup_sen_aps) & !is.na(census$num_pup_sen_ap), 
+                                 census$num_pup_sen_aps - census$num_pup_sen_ap, census$num_pup_sen_st)
+
+
+
+# Compute total of pupils with SEN
+census[, "num_pup_sen_tot"] <- ifelse(census$missing_count != sum(grepl("num_pup_sen", names(census))),
+                                      rowSums(census[, c("num_pup_sen_a", # School Action 2010/11 - 2013/14
+                                                         "num_pup_sen_aps", # School Action Plus or Statement 2010/11 - 2013/14
+                                                         "num_pup_sen_k", # SEN support 2014/15 - 2024/25
+                                                         "num_pup_sen_e" # EHC 2014/15 - 2024/25 (until 2018/19, also included Statement)
+                                                         )], na.rm = T),
+                                      NA)
+
+# delete count columns
+census[, grepl("_count", names(census))] <- NULL
+
+
+# census[, "num_pup_sen_high"] <- ifelse(!is.na(census$num_pup_sen_tot),
+#                                rowSums(census[, c("num_pup_sen_st", "num_pup_sen_e", "num_pup_sen_aps")], na.rm = T),
+#                                NA)
+# note: in 2011/12, there is only data on school action and statement or school action plus
+
+# census[, "num_pup_sen_lower"] <- ifelse(!is.na(census$num_pup_sen_tot),
+#                                       rowSums(census[, c("num_pup_sen_a", "num_pup_sen_ap",
+#                                                          "num_pup_sen_k")], na.rm = T),
+#                                       NA)
 
 # add NAs for 2019/20
-levels <- c("tot", "high", "lower")
-census[census$time_period == 201920, paste0("num_pup_sen_", levels)] <- NA
-
-
-# compute percentages
-for (i in 1:length(levels)) {
-  numerator <- paste0("num_pup_sen_", levels[i])
-  quotient <- paste0("perc_pup_sen_", levels[i])
-  census[, quotient] <- census[, numerator] / census[, denominator] * 100
-}
+census[census$time_period == 201920, grepl("pup_sen", names(census))] <- NA
 
 # re-order and drop columns
 census <- census %>% 
-  relocate(any_of(c(paste0("num_pup_sen_", levels), paste0("perc_pup_sen_", levels))), .after = num_pup_boys) %>%
+  relocate(num_pup_sen_tot, .before = num_pup_sen_a) %>%
   arrange(laestab, time_period)
-
-# delete more granular SEN data
-levels <- c("a", "ap", "st", "k", "e", "aps")
-census[, paste0("num_pup_sen_", levels)] <- NULL
-census[, paste0("perc_pup_sen_", levels)] <- NULL
-
- 
-# # Language measures - percentages
-# 
-# # Number of pupils with English as first language not included in 2011-12, re-compute using num_pup_used_for_eal_calculation variable where possible
-# census$num_pup_efl <- ifelse(census$time_period == 201112, (census$num_pup_used_for_eal_calculation - census$num_pup_eal - census$num_pup_ufl), census$num_pup_efl)
-# # Number of pupils used for EAL computations mostly missing, re-compute as sum of EFL, EAL and unclassified
-# census$num_pup_used_for_eal_calculation <- ifelse(is.na(census$num_pup_used_for_eal_calculation), (census$num_pup_efl + census$num_pup_eal + census$num_pup_ufl), census$num_pup_used_for_eal_calculation)
-
-
-# # in theory, this number *could* be used to re-compute the percentages for language measures
-# denominator <- "num_pup_used_for_eal_calculation"
-# 
-# numerator <- "num_pup_eal"
-# quotient <- "perc_pup_eal" 
-# census[, quotient] <- census[, numerator] / census[, denominator] * 100
-# 
-# numerator <- "num_pup_efl"
-# quotient <- "perc_pup_efl" 
-# census[, quotient] <- census[, numerator] / census[, denominator] * 100
-# 
-# numerator <- "num_pup_ufl"
-# quotient <- "perc_pup_ufl" 
-# census[, quotient] <- census[, numerator] / census[, denominator] * 100
-
-# Free School Meals measures - percentages
-
-# # in theory, the percentages could be recomputed as shown below but there is too much data missing
-# 
-# # FSM 
-# denominator <- "num_pup_used_for_fsm_calculation"
-# 
-# numerator <- "num_pup_fsm_eligible"
-# quotient <- "perc_pup_fsm_eligible" 
-# census[, quotient] <- census[, numerator] / census[, denominator] * 100
-# 
-# # FSM EVER
-# denominator <- "num_pup_used_for_fsm_ever_calculation"
-# 
-# numerator <- "num_pup_fsm_ever_6_years"
-# quotient <- "perc_pup_fsm_ever_6_years" 
-# census[, quotient] <- census[, numerator] / census[, denominator] * 100
 
 # save file
 data.table::fwrite(census, file = file.path(dir_data, "data_spt_census.csv"), row.names = F)
