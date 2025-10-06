@@ -78,7 +78,7 @@ library(data.table)
 # Get Information about Schools #
 
 # read in establishment data
-gias <- as.data.frame(fread(file.path(dir_data, "data_gias_search.csv"), encoding = "UTF-8"))
+gias <- as.data.frame(fread(file.path(dir_data, "data_gias_estab.csv"), encoding = "UTF-8"))
 
 # remove all establishments without an laestab (i.e., Children's centres, British schools overseas, Online providers)
 gias <- gias[!is.na(gias$laestab), ]
@@ -197,9 +197,22 @@ tto <- tto %>%
   # select(-c(school_type, teacher_fte_in_census_year, remained_in_the_same_school, left_the_state.funded_system, left_to_another_state.funded_school)) %>%
   select(-c(school_type)) %>%
   as.data.frame()
-  
+
 # check urns and clean up data
 tto <- cleanup_data(data_in = tto)
+
+# deduct recruitment based on retention
+tto <- tto %>%
+  # order by year
+  arrange(laestab, time_period) %>%
+  # operate within schools
+  group_by(laestab) %>%
+  # compute recruited teachers: stock in THIS year - retained in PREVIOUS year
+  mutate(recruited_to_the_school = teacher_fte_in_census_year - lag(remained_in_the_same_school)) %>%
+  # compute percentage retained
+  mutate(recruitment_rate = recruited_to_the_school / teacher_fte_in_census_year * 100) %>%
+  as.data.frame()
+
 
 
 # Size of the school workforce - school level #
@@ -229,7 +242,6 @@ pattern_wtc <- "workforce_teacher_characteristics_school_201011_202425"
 dir_wtc <- file.path(dir_in, "2024", "supporting-files")
 dir_tmp <- file.path(dir_wtc, pattern_wtc)
 
-"data/school-workforce-in-england/2024/supporting-files/workforce_teacher_characteristics_school_201011_202425.zip"
 unzip = F
 if (unzip) {
   # determine zipped folder
@@ -611,6 +623,11 @@ psych::describeBy(check$diff_teacher_fte_in_census_year, group = check$time_peri
 
 
 # is fte_all_teachers equal to teacher_fte_in_census_year?
+# TC: it is correct that they don’t always match. They are drawn from slightly different versions of our data and 
+# can differ for example where teachers have multiple contracts, particularly across multiple schools, 
+# and how missing data (at school level) is treated. There are also differences due to rounding. 
+# The workforce file is a more accurate measure of the total staff in the system each year, 
+# while the turnover file aims to track staff across consecutive years.
 check$diff_fte_teach_tto <- round(check$fte_all_teachers - check$teacher_fte_in_census_year, 2)
 sum(check$diff_fte_teach_tto != 0, na.rm = T) # fte_all_teachers is NOT equal to teacher_fte_in_census_year in 172871 instances
 sum(check$diff_fte_teach_tto != 0, na.rm = T)/nrow(check) # fte_all_teachers is NOT equal to teacher_fte_in_census_year roughly half of the data
@@ -618,4 +635,5 @@ psych::describe(check$diff_fte_teach_tto)
 psych::describeBy(check$diff_fte_teach_tto, group = check$time_period)
 
 # save data
+names(df) <- tolower(names(df))
 data.table::fwrite(df, file = file.path(dir_data, "data_swf.csv"), row.names = F)
