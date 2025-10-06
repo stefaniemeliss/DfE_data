@@ -26,6 +26,9 @@
 
 # **DOWNLOAD**: This data is updated daily. The data fields and the order of the data fields can change in these downloads. 
 
+# The difference is Children's centre and Children's centre linked sites are not included in the all establishment data extract (DOWNLOAD) 
+# but they will be included in the results (SEARCH) from the find an establishment search if they are not filtered out.
+
 # Empty the workspace in the global environment except for this function
 rm(list = ls())
 gc()
@@ -104,107 +107,9 @@ file_stem <- get_file_stem()
 # Load necessary libraries
 library(data.table)
 
-# Source external functions
-# devtools::source_url("https://github.com/stefaniemeliss/edu_stats/blob/main/functions.R?raw=TRUE")
-
-
-#### source: https://get-information-schools.service.gov.uk/Search ####
-
-# date downloaded 26/06/2025
-stem <- "results_gias_search_core"
-# All establishments --> Download these search results --> Core set of data + Links
-stem <- "results_gias_search_full"
-# All establishments --> Download these search results --> Full set of data + Links
-res <- fread(file.path(dir_misc, stem, "results.csv"), fill = Inf, header = TRUE, sep = ",")
-
-
-# fix col names
-names(res) <- tolower(names(res))
-names(res) <- gsub("(", "", names(res), fixed = T)
-names(res) <- gsub(")", "", names(res), fixed = T)
-names(res) <- gsub(" ", "_", names(res), fixed = T)
-
-# Convert encoding using iconv
-res$establishmentname <- iconv(res$establishmentname, from = "latin1", to = "UTF-8")
-
-# Linked establishments #
-
-# identify index of column named linked_establishments
-idx_start <- as.numeric(which(names(res) == "linked_establishments"))
-
-# identify index of last column (also contains info on linked establishments)
-idx_stop <- as.numeric(ncol(res))
-
-# overwrite column names
-names(res)[idx_start:idx_stop] <- sprintf("linked_establishments_%02d", 1:(idx_stop - idx_start + 1))
-
-# concatenate info on linked establishments
-res[, links := do.call(paste, c(.SD, sep = " ")), .SDcols = idx_start:idx_stop]
-
-# LA ESTAB #
-
-# Ensure laestab_number has leading zeros and concatenate with dfe_number
-res[, establishmentnumber_str := ifelse(!is.na(establishmentnumber), sprintf("%04d", establishmentnumber), NA)]
-
-# combine LA code with estab number if LA code is not zero and estab number is not NA
-res[, laestab := ifelse(!is.na(establishmentnumber) & la_code != 0, as.numeric(paste0(la_code, establishmentnumber_str)), NA)]
-
-
-# format dates #
-res[, opendate := ifelse(opendate == "", NA_character_, opendate)]
-res[, opendate := as.Date(opendate, format = "%d-%m-%Y")]
-res[, closedate := ifelse(closedate == "", NA_character_, closedate)]
-res[, closedate := as.Date(closedate, format = "%d-%m-%Y")]
-
-# make all empty cells NA_character_
-res[, (names(res)[sapply(res, is.character)]) := lapply(.SD, function(x) { ifelse(x == "", NA_character_, x)}), .SDcols = sapply(res, is.character)]
-
-
-
-# fix religion #
-
-# Define a pattern to match Christian denominations
-christian_patterns <- c("Church", "Catholic", "Christian", "Anglican", "Methodist", "Adventist", "Evangelical", "Protestant", "Moravian", "Quaker", "Baptist")
-# Create a regex pattern
-pattern <- paste(christian_patterns, collapse = "|")
-
-# Identify Christian denominations
-res[, religiouscharacter_christian := grepl(pattern, religiouscharacter_name, ignore.case = TRUE)]
-
-# fix urbanicity
-res[, urbanicity := ifelse(grepl("Urban|urban", urbanrural_name), "Urban",
-                          ifelse(grepl("Rural|rural", urbanrural_name), "Rural", NA))]
-
-# fix gender #
-res[, sex_students := fifelse(res[, gender_name] == "Girls" | res[, gender_name] == "Boys", "Single-sex",
-                             fifelse(res[, gender_name] == "Mixed", "Co-ed", res[, gender_name]))]
-
-
-
-
-# select columns
-out <- res[, .(laestab, urn, la_code, establishmentnumber, establishmentname,
-              street, postcode, town, gor_name, la_name, districtadministrative_name, administrativeward_name, parliamentaryconstituency_name, #lat, long,
-              typeofestablishment_name, 
-              establishmentstatus_name, opendate, reasonestablishmentopened_name,
-              closedate, reasonestablishmentclosed_name,
-              phaseofeducation_name, statutorylowage, statutoryhighage,
-              boarders_name, nurseryprovision_name, officialsixthform_name,
-              gender_name, sex_students, religiouscharacter_name, religiouscharacter_christian, diocese_name,
-              admissionspolicy_name, urbanrural_name, urbanicity,
-              trustschoolflag_name, trusts_name, links
-)]
-
-# sort
-setorder(out, urn)
-
-# save file
-fwrite(out, file = file.path(dir_data, "data_gias_search.csv"), bom = T)
-
-
 #### source: https://get-information-schools.service.gov.uk/Downloads ####
-stem <- "extract_gias_download"
-# date downloaded 26/06/2025
+stem <- "extract_gias_download_20251006"
+# date downloaded 06/10/2025
 # Establishment downloads (select all)
 # Establishment fields CSV
 # Establishment links CSV
@@ -219,13 +124,9 @@ stem <- "extract_gias_download"
 
 # process data #
 
-# Establishment links
-links <- fread(file = file.path(dir_misc, stem, "links_edubasealldata20250626.csv"))
-names(links) <- tolower(names(links))
-links$linkname <- iconv(links$linkname, from = "latin1", to = "UTF-8")
-
 # Establishment fields
-fields <- fread(file = file.path(dir_misc, stem, "edubasealldata20250626.csv"))
+file_fields <- list.files(path = file.path(dir_misc, stem), pattern = "^edubasealldata", full.names = T)
+fields <- fread(file = file_fields)
 
 # fix col names
 names(fields) <- tolower(names(fields))
@@ -235,100 +136,161 @@ names(fields) <- gsub(" ", "_", names(fields), fixed = T)
 
 fields$establishmentname <- iconv(fields$establishmentname, from = "latin1", to = "UTF-8")
 
-# select cols
-dt <- fields[, .SD, .SDcols = 
-               grepl("urn|la_code|establishmentn|statut|boarders|nurs|sixth|gender|relig|dioc|admiss|trust|urban|country|street|town|postcode|open|close|typeofe|uprn|phase|status|gor|parlia|district|ward|la_name", names(fields))]
-
-# # Subset data
-# dt <- dt[la_code != 0 & # no data from schools that are not affiliated with a LA
-#            !is.na(establishmentnumber) & # or don't have an estab number
-#            !country_name %in% c("Gibraltar", "Jersey") & # or are in Jersey or Gibralta
-#            !grepl("Welsh|Further education|Miscellaneous|Higher education institutions", typeofestablishment_name) & # only schools
-#            !grepl("Wales|Not Applicable", gor_name)] # or Wales
+# replace all "" with NA
+fields <- fields[, lapply(.SD, function(x) replace(x, which(x==""), NA))]
 
 # Ensure laestab_number has leading zeros and concatenate with dfe_number
 fields[, establishmentnumber_str := ifelse(!is.na(establishmentnumber), sprintf("%04d", establishmentnumber), NA)]
-fields[, laestab := ifelse(!is.na(establishmentnumber), as.numeric(paste0(la_code, establishmentnumber_str)), NA)]
-
-# extract key
-key <- fields[, .(laestab, urn, establishmentname)]
-
-# subset links data so that it only includes relevant URNs
-links <- links[urn %in% key[, urn]]
-# process date
-links[, linkestablisheddate := ifelse(linkestablisheddate == "", NA_character_, linkestablisheddate)]
-links[, linkestablisheddate := as.Date(linkestablisheddate, format = "%d-%m-%Y")]
-
-# add link data
-dt <- merge(fields, links, by = "urn", all.x = T)
+fields[, la_code_str := ifelse(!is.na(la_code), sprintf("%03d", la_code), NA)]
+fields[, dfe_number := ifelse(!is.na(establishmentnumber) & !is.na(la_code), paste0(la_code_str, "/", establishmentnumber_str), NA)]
+fields[, laestab := ifelse(!is.na(establishmentnumber) & la_code != 0, as.numeric(paste0(la_code_str, establishmentnumber_str)), NA)]
+fields$establishmentnumber_str <- NULL
+fields$la_code_str <- NULL
 
 # format dates
-dt[, opendate := ifelse(opendate == "", NA_character_, opendate)]
-dt[, opendate := as.Date(opendate, format = "%d-%m-%Y")]
-dt[, closedate := ifelse(closedate == "", NA_character_, closedate)]
-dt[, closedate := as.Date(closedate, format = "%d-%m-%Y")]
-
-# replace 99[99] with NA
-dt[, diocese_code := ifelse(diocese_code == "0000" | diocese_code == "9999", NA_character_, diocese_code)]
-dt[, religiouscharacter_code := ifelse(religiouscharacter_code == 99, NA, religiouscharacter_code)]
-dt[, previousla_code := ifelse(previousla_code == 999 | previousla_code == 0, NA, previousla_code)]
-dt[, urbanrural_code := ifelse(urbanrural_code == "99", NA_character_, urbanrural_code)]
-dt[, reasonestablishmentopened_code := ifelse(reasonestablishmentopened_code == 99, NA, reasonestablishmentopened_code)]
-dt[, reasonestablishmentclosed_code := ifelse(reasonestablishmentclosed_code == 99, NA, reasonestablishmentclosed_code)]
-
-# make all empty cells NA_character_
-dt[, (names(dt)[sapply(dt, is.character)]) := lapply(.SD, function(x) { ifelse(x == "", NA_character_, x)}), .SDcols = sapply(dt, is.character)]
+fields[, opendate := as.Date(opendate, format = "%d-%m-%Y")]
+fields[, closedate := as.Date(closedate, format = "%d-%m-%Y")]
 
 # fix religion #
-# Define a pattern to match Christian denominations
-christian_patterns <- c("Church", "Catholic", "Christian", "Anglican", "Methodist", "Adventist", "Evangelical", "Protestant", "Moravian", "Quaker", "Baptist")
-# Create a regex pattern
-pattern <- paste(christian_patterns, collapse = "|")
+# Create a regex pattern to match Christian denominations
+p <- paste0(c("Church", "Catholic", "Christian", "Anglican", "Methodist", "Adventist", "Evangelical", "Protestant", "Moravian", "Quaker", "Baptist"), collapse = "|")
 
 # Identify Christian denominations
-dt[, religiouscharacter_christian := grepl(pattern, religiouscharacter_name, ignore.case = TRUE)]
+fields[, religiouscharacter_christian := grepl(pattern = p, religiouscharacter_name, ignore.case = TRUE)]
 
-out <- dt[, .(laestab, urn, la_code, establishmentnumber, establishmentname,
-              street, postcode, town, gor_name, la_name, districtadministrative_name, administrativeward_name, parliamentaryconstituency_name, #lat, long,
-              typeofestablishment_code, typeofestablishment_name, 
-              establishmentstatus_name, opendate, reasonestablishmentopened_code, reasonestablishmentopened_name,
-              closedate, reasonestablishmentclosed_code, reasonestablishmentclosed_name,
-              phaseofeducation_code, phaseofeducation_name, statutorylowage, statutoryhighage,
-              boarders_name, nurseryprovision_name, officialsixthform_name,
-              gender_name, religiouscharacter_name, religiouscharacter_christian, diocese_name,
-              admissionspolicy_name, urbanrural_name,
-              trustschoolflag_name, trusts_code, trusts_name,
-              previousla_code, previousestablishmentnumber,
-              linkurn, linkname, linktype, linkestablisheddate
-)]
+sum(is.na(fields$boarders_code))
+sum(is.na(fields$boarders_name))
+unique(fields$boarders_code)
+unique(fields$boarders_name[fields$boarders_code == 9])
+
+sum(is.na(fields$admissionspolicy_code))
+sum(is.na(fields$admissionspolicy_name))
+unique(fields$admissionspolicy_code)
+unique(fields$admissionspolicy_name[fields$admissionspolicy_code == 9])
+
+# rename columns
+setnames(fields, "trusts_code", "group_uid")
+setnames(fields, "la_code", "la_number")
+names(fields)
+
+# remove all columns containing a numeric code
+dt <- fields[, .SD, .SDcols = 
+               !grepl("_code", names(fields))]
+
+
+# define col name pattern
+p <- paste0(c(
+  # school identifiers + info on estab type & status
+  "urn", "la_", "estab", "dfe", 
+  # open and close dates + reasons
+  "open", "close", 
+  # age of pupils            
+  "phase", "statut", "nurs", "sixth", 
+  # characteristics of school
+  "boarders", "relig", "dioc", "admiss", "senpru", 
+  # characteristics of pupils
+  "gender", "numberofpupils", "percentagefsm",
+  # info on trusts, federations and sponsors
+  # "trust", "group_uid", "sponsor", "federation",
+  "flag", "group_uid", #"sponsor", "federation",
+  # location and ONS admin info
+  "urban", "street", "town", "postcode", "gor", "parlia", "district", "ward"), 
+  collapse = "|")
+
+# select cols using pattern
+dt <- dt[, .SD, .SDcols = 
+           grepl(pattern = p, names(dt))]
+
+# remove cols not needed
+dt <- dt[, .SD, .SDcols = 
+            ! grepl("previous|boardingestablishment|accred", names(dt))]
+
+# remove "_name" from column names
+names(dt) <- gsub("_name", "", names(dt))
+
+# rename columns
+setnames(dt, "la_number", "la_code")
+
+# select and re-order columns
+out <- dt[, .(
+  # school identifiers + info on estab type & status
+  urn, laestab, dfe_number, la_code, establishmentnumber, establishmentname,
+  # estab status
+  establishmentstatus, opendate, reasonestablishmentopened, closedate, reasonestablishmentclosed,
+  # estab type
+  typeofestablishment, establishmenttypegroup,
+  # age of pupils
+  phaseofeducation, statutorylowage, statutoryhighage, nurseryprovision, officialsixthform,
+  # characteristics of pupils
+  gender, numberofpupils, percentagefsm,
+  # characteristics of school
+  senpru, boarders, religiouscharacter, religiouscharacter_christian, diocese, admissionspolicy,
+  # admin
+  trustschoolflag, group_uid, schoolsponsorflag, federationflag,
+  # address
+  urbanrural, street, postcode, town, gor, la, districtadministrative, administrativeward, parliamentaryconstituency)]
+
 # sort
 setorder(out, urn)
 
-# save file
-fwrite(out, file = file.path(dir_data, "data_gias_download.csv"), bom = T)
+# Establishment links #
+file_links <- list.files(path = file.path(dir_misc, stem), pattern = "links_edubasealldata", full.names = T)
+links <- fread(file = file_links)
+names(links) <- tolower(names(links))
+links$linkname <- iconv(links$linkname, from = "latin1", to = "UTF-8")
 
-# Establishment groups
-groups <- fread(file = file.path(dir_misc, stem, "academiesmatmembership20250626.csv"))
+# replace all "" with NA
+links <- links[, lapply(.SD, function(x) replace(x, which(x==""), NA))]
+# process date
+links[, linkestablisheddate := as.Date(linkestablisheddate, format = "%d-%m-%Y")]
+
+# select columns
+links <- links[, c("urn", "linkurn", "linktype")]
+
+# create counter
+links[, counter := seq_len(.N), by = urn]
+links[, counter := sprintf("%02d", counter)]
+
+# reshape from long to wide
+links <- reshape(links, idvar = "urn", timevar = "counter", direction = "wide", sep = "_")
+
+# add link data
+gias <- merge(out, links, by = "urn", all.x = T)
+
+# save file
+fwrite(out, file = file.path(dir_data, "data_gias_estab.csv"), bom = T)
+
+# Establishment groups #
+
+# read data
+file_groups <- list.files(path = file.path(dir_misc, stem), pattern = "academiesmatmembership", full.names = T)
+groups <- fread(file = file_groups)
 
 # fix col names
 names(groups) <- tolower(names(groups))
 names(groups) <- gsub("(", "", names(groups), fixed = T)
 names(groups) <- gsub(")", "", names(groups), fixed = T)
 names(groups) <- gsub(" ", "_", names(groups), fixed = T)
+setnames(groups, "la_code", "la_number")
 
 groups$establishmentname <- iconv(groups$establishmentname, from = "latin1", to = "UTF-8")
 groups$group_name <- iconv(groups$group_name, from = "latin1", to = "UTF-8")
 
-# filter rows
-groups <- groups[group_status != "Closed"]
-groups <- groups[establishmentstatus_name != "Closed"]
-groups <- groups[group_type == "Multi-academy trust"]
+# replace all "" with NA
+groups <- groups[, lapply(.SD, function(x) replace(x, which(x==""), NA))]
+
+# # filter rows
+# groups <- groups[group_status != "Closed"]
+# groups <- groups[establishmentstatus_name != "Closed"]
+# groups <- groups[group_type == "Multi-academy trust"]
 
 # select cols
 groups <- groups[, .SD, .SDcols = 
-                grepl("urn|la_|number|id|date|phase|reason|establishmentname|group_name", names(groups))]
+                   grepl("urn|dfe|la_|estab|group", names(groups))]
+
 groups <- groups[, .SD, .SDcols = 
-             !grepl("n_code|d_code|companies|ofsted", names(groups))]
+                   ! grepl("_code|ukprn|companies|street|local|address|town|county|postcode", names(groups))]
+setnames(groups, "la_number", "la_code")
 
 # add laestab
 groups[, laestab := as.numeric(gsub("/", "", dfe_number))]
@@ -341,5 +303,8 @@ lookup <- lookup[!gor_name %in% c("Not Applicable", "Wales (pseudo)")]
 groups <- merge(lookup, groups, by = "la_name", all.y = T)
 groups <- groups[!is.na(urn)] # remove MATs without any schools
 
+# remove "_name" from column names
+names(groups) <- gsub("_name", "", names(groups))
+
 # save file
-fwrite(groups, file = file.path(dir_data, "data_establishments_groups.csv"), bom = T)
+fwrite(groups, file = file.path(dir_data, "data_gias_groups.csv"), bom = T)
