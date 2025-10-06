@@ -113,7 +113,7 @@ if (rename_folders) {
 # Get Information about Schools #
 
 # read in establishment data
-gias <- as.data.frame(fread(file.path(dir_data, "data_gias_search.csv"), encoding = "UTF-8"))
+gias <- as.data.frame(fread(file.path(dir_data, "data_gias_estab.csv"), encoding = "UTF-8"))
 
 # remove all establishments without an laestab (i.e., Children's centres, British schools overseas, Online providers)
 gias <- gias[!is.na(gias$laestab), ]
@@ -280,6 +280,7 @@ column_lookup_pupils <- tibble(
 
 # Run the review of the column name lookup
 review_lookup_mappings(lookup_table = column_lookup_pupils)
+write.csv(apply(column_lookup_pupils, 2, as.character), file = file.path(dir_misc, "meta_spc_pupils.csv"), row.names = F)
 
 # Create the reverse lookup
 reverse_lookup_pupils <- create_reverse_lookup(column_lookup_pupils)
@@ -539,7 +540,7 @@ column_lookup_class_size <- tibble(
 
 # Run the review of the column name lookup
 review_lookup_mappings(lookup_table = column_lookup_class_size)
-
+write.csv(apply(column_lookup_class_size, 2, as.character), file = file.path(dir_misc, "meta_spc_classes.csv"), row.names = F)
 
 # Create the reverse lookup
 reverse_lookup_class_size <- create_reverse_lookup(column_lookup_class_size)

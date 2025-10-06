@@ -86,7 +86,7 @@ na_values <- c(":", "z", "NULL", "Unknown", "x", "..", "", ">", "^", ".")
 # Get Information about Schools #
 
 # read in establishment data
-gias <- as.data.frame(fread(file.path(dir_data, "data_gias_search.csv"), encoding = "UTF-8"))
+gias <- as.data.frame(fread(file.path(dir_data, "data_gias_estab.csv"), encoding = "UTF-8"))
 
 # remove all establishments without an laestab (i.e., Children's centres, British schools overseas, Online providers)
 gias <- gias[!is.na(gias$laestab), ]

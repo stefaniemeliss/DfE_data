@@ -90,7 +90,7 @@ na_values <- c("SUPP", "NP", "", "NE", "NA", "LOWCOV", "SP", "RE", "NEW", "UNAVA
 # Get Information about Schools #
 
 # read in establishment data
-gias <- as.data.frame(fread(file.path(dir_data, "data_gias_search.csv"), encoding = "UTF-8"))
+gias <- as.data.frame(fread(file.path(dir_data, "data_gias_estab.csv"), encoding = "UTF-8"))
 
 # remove all establishments without an laestab (i.e., Children's centres, British schools overseas, Online providers)
 gias <- gias[!is.na(gias$laestab), ]
@@ -309,6 +309,7 @@ column_lookup_census <- tibble(
 
 # Run the review of the column name lookup
 review_lookup_mappings(lookup_table = column_lookup_census)
+write.csv(apply(column_lookup_census, 2, as.character), file = file.path(dir_misc, "meta_census.csv"), row.names = F)
 
 # Create the reverse lookup for school census data
 reverse_lookup_census <- create_reverse_lookup(column_lookup_census)

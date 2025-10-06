@@ -93,7 +93,7 @@ na_values <- c("SUPP", "NP", "", "NE", "NA", "LOWCOV", "SP", "RE", "NEW", "UNAVA
 # Get Information about Schools #
 
 # read in establishment data
-gias <- as.data.frame(fread(file.path(dir_data, "data_gias_search.csv"), encoding = "UTF-8"))
+gias <- as.data.frame(fread(file.path(dir_data, "data_gias_estab.csv"), encoding = "UTF-8"))
 
 # remove all establishments without an laestab (i.e., Children's centres, British schools overseas, Online providers)
 gias <- gias[!is.na(gias$laestab), ]
@@ -704,6 +704,7 @@ column_lookup_ks4 <- tibble(
 
 # Run the review of the column name lookup
 review_lookup_mappings(lookup_table = column_lookup_ks4)
+write.csv(apply(column_lookup_ks4, 2, as.character), file = file.path(dir_misc, "meta_tmp_ks4.csv"), row.names = F)
 
 # Create the reverse lookup for ks4 data
 reverse_lookup_ks4 <- create_reverse_lookup(column_lookup_ks4)
@@ -1284,6 +1285,7 @@ column_lookup_ks4 <- tibble(
 
 # Run the review of the column name lookup
 review_lookup_mappings(lookup_table = column_lookup_ks4)
+write.csv(apply(column_lookup_ks4, 2, as.character), file = file.path(dir_misc, "meta_ks4.csv"), row.names = F)
 
 # Create the reverse lookup for ks4 data
 reverse_lookup_ks4 <- create_reverse_lookup(column_lookup_ks4)
@@ -1297,7 +1299,7 @@ for (i in seq_along(start:finish)) {
   year = c(start:finish)[i]  
   
   # skip covid years
-  if(year == 2019 | year == 2020 | year == 2021) next
+  if(year == 2019 | year == 2020) next
   
   # determine academic year
   academic_year <- paste0(year,"-", year+1)

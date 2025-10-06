@@ -86,7 +86,7 @@ na_values <- c("SUPP", "NP", "")
 # Get Information about Schools #
 
 # read in establishment data
-gias <- as.data.frame(fread(file.path(dir_data, "data_gias_search.csv"), encoding = "UTF-8"))
+gias <- as.data.frame(fread(file.path(dir_data, "data_gias_estab.csv"), encoding = "UTF-8"))
 
 # remove all establishments without an laestab (i.e., Children's centres, British schools overseas, Online providers)
 gias <- gias[!is.na(gias$laestab), ]
@@ -94,6 +94,64 @@ gias <- gias[!is.na(gias$laestab), ]
 # select relevant laestab and urn only and relevant columns
 gias <- gias[!duplicated(gias), c("laestab", "urn", "establishmentname")]
 names(gias) <- c("laestab", "urn_gias", "school")
+
+# Process meta data # 
+for (i in seq_along(start:finish)) {
+  
+  year = c(start:finish)[i]  
+  
+  # skip covid years
+  if(year == 2014 | year == 2019 | year == 2020) next
+  
+  # determine academic year
+  academic_year <- paste0(year,"-", year+1)
+  time_period <- as.numeric(gsub("-20", "", academic_year))
+  
+  # determine folder for academic year
+  dir_year <- file.path(dir_in, academic_year)
+  
+  # read in meta data
+  file_meta <- list.files(path = dir_year, pattern = "abs_meta", full.names = T, recursive = T)
+  # get meta data
+  tmp <- read.csv(file = file_meta)
+  names(tmp) <- gsub("X...", "", tolower(names(tmp)), fixed = T)
+  
+  # rename columns
+  names(tmp) <- gsub(".", "", tolower(names(tmp)), fixed = T)
+  names(tmp)[names(tmp) == "variable"] <- "fieldname"
+  names(tmp)[names(tmp) == "label"] <- "labeldescription"
+  
+  # thin down columns
+  tmp <- tmp[, c("fieldname", "labeldescription")]
+  
+  # add time period
+  tmp$time_period <- time_period
+  
+  tmp$fieldname <- tolower(tmp$fieldname)
+  
+  # combine across years
+  if (year == start) {
+    meta <- tmp
+  } else {
+    meta <- rbind.all.columns(meta, tmp)
+  }
+  
+}
+
+# save meta data to xlsx
+xlsx_file <- file.path(dir_misc, "meta_spt.xlsx")
+sheet_name <- "absences"
+
+if (file.exists(xlsx_file)) {
+  wb <- openxlsx::loadWorkbook(xlsx_file) # Load the workbook if it exists
+  if (sheet_name %in% names(wb)) openxlsx::removeWorksheet(wb, sheet_name) # Remove the sheet if it already exists
+} else {
+  wb <- openxlsx::createWorkbook() # Create a new workbook if it does not exist
+}
+openxlsx::addWorksheet(wb, sheet_name) # Add the new sheet with your data
+openxlsx::writeData(wb, sheet_name, meta) # Write object to worksheet
+openxlsx::saveWorkbook(wb, xlsx_file, overwrite = TRUE) # Save the workbook (overwriting if necessary)
+
 
 
 # LOOP OVER ALL YEARS 

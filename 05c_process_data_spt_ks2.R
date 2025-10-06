@@ -93,7 +93,7 @@ na_values <- c("SUPP", "NP", "", "NE", "NA", "LOWCOV", "SP", "RE", "NEW", "UNAVA
 # Get Information about Schools #
 
 # read in establishment data
-gias <- as.data.frame(fread(file.path(dir_data, "data_gias_search.csv"), encoding = "UTF-8"))
+gias <- as.data.frame(fread(file.path(dir_data, "data_gias_estab.csv"), encoding = "UTF-8"))
 
 # remove all establishments without an laestab (i.e., Children's centres, British schools overseas, Online providers)
 gias <- gias[!is.na(gias$laestab), ]
@@ -889,6 +889,7 @@ column_lookup_ks2 <- tibble(
 
 # Run the review of the column name lookup
 review_lookup_mappings(lookup_table = column_lookup_ks2)
+write.csv(apply(column_lookup_ks2, 2, as.character), file = file.path(dir_misc, "meta_tmp_ks2.csv"), row.names = F)
 
 # Create the reverse lookup for KS2 data
 reverse_lookup_ks2 <- create_reverse_lookup(column_lookup_ks2)
@@ -1334,7 +1335,6 @@ column_lookup_ks2 <- tibble(
     
     #  Maximise for similarity across measures (expected standards)
     "att_math_avg_score",
-    "att_math_avg_score",
     "att_math_avg_score_boys", "att_math_avg_score_girls",
     "att_math_avg_score_lo", "att_math_avg_score_mi", "att_math_avg_score_hi", # not in 2023/24 onwards
     "att_math_avg_score_eal",
@@ -1564,7 +1564,6 @@ column_lookup_ks2 <- tibble(
     #  2012/13 to 2014/15 - Percentage achieving Level 4B or above in maths (att_math_l4bplus)
     #  2015/16 to 2023/24 - Percentage of pupils reaching the expected standard in maths (att_math_exp)
     c("att_math_avg_score"),
-    c("att_math_avg_score"),
     c("att_math_avg_score_boys"), 
     c("att_math_avg_score_girls"),
     c("att_math_avg_score_lo"), 
@@ -1699,6 +1698,7 @@ column_lookup_ks2 <- tibble(
 
 # Run the review of the column name lookup
 review_lookup_mappings(lookup_table = column_lookup_ks2)
+write.csv(apply(column_lookup_ks2, 2, as.character), file = file.path(dir_misc, "meta_ks2.csv"), row.names = F)
 
 # Create the reverse lookup for KS2 data
 reverse_lookup_ks2 <- create_reverse_lookup(column_lookup_ks2)
