@@ -224,7 +224,7 @@ out <- dt[, .(
   # characteristics of pupils
   gender, numberofpupils, percentagefsm,
   # characteristics of school
-  senpru, boarders, religiouscharacter, religiouscharacter_christian, diocese, admissionspolicy,
+  senpru, specialclasses, boarders, religiouscharacter, religiouscharacter_christian, diocese, admissionspolicy,
   # admin
   trustschoolflag, group_uid, schoolsponsorflag, federationflag,
   # address
