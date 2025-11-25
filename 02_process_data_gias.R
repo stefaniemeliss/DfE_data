@@ -108,8 +108,8 @@ file_stem <- get_file_stem()
 library(data.table)
 
 #### source: https://get-information-schools.service.gov.uk/Downloads ####
-stem <- "extract_gias_download_20251006"
-# date downloaded 06/10/2025
+stem <- "extract_gias_download_20251125"
+# date downloaded 25/11/2025
 # Establishment downloads (select all)
 # Establishment fields CSV
 # Establishment links CSV
@@ -187,7 +187,7 @@ p <- paste0(c(
   # age of pupils            
   "phase", "statut", "nurs", "sixth", 
   # characteristics of school
-  "boarders", "relig", "dioc", "admiss", "senpru", 
+  "boarders", "relig", "dioc", "admiss", "special", "senpru", 
   # characteristics of pupils
   "gender", "numberofpupils", "percentagefsm",
   # info on trusts, federations and sponsors
