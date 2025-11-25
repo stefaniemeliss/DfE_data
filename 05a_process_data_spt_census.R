@@ -520,6 +520,17 @@ census[, "num_pup_sen_tot"] <- ifelse(census$missing_count != sum(grepl("num_pup
                                                          )], na.rm = T),
                                       NA)
 
+# Compute percentage of pupils with SEN
+census[, "perc_pup_sen_tot"] <- ifelse(census$missing_count != sum(grepl("perc_pup_sen", names(census))),
+                                      rowSums(census[, c("perc_pup_sen_a", # School Action 2010/11 - 2013/14
+                                                         "perc_pup_sen_aps", # School Action Plus or Statement 2010/11 - 2013/14
+                                                         "perc_pup_sen_k", # SEN support 2014/15 - 2024/25
+                                                         "perc_pup_sen_e" # EHC 2014/15 - 2024/25 (until 2018/19, also included Statement)
+                                                         )], na.rm = T),
+                                      NA)
+# override all values above 100 with 100
+census[, "perc_pup_sen_tot"] <- ifelse(census[, "perc_pup_sen_tot"] > 100, 100, census[, "perc_pup_sen_tot"])
+
 # delete count columns
 census[, grepl("_count", names(census))] <- NULL
 
@@ -539,7 +550,7 @@ census[census$time_period == 201920, grepl("pup_sen", names(census))] <- NA
 
 # re-order and drop columns
 census <- census %>% 
-  relocate(num_pup_sen_tot, .before = num_pup_sen_a) %>%
+  relocate(num_pup_sen_tot, perc_pup_sen_tot, .before = num_pup_sen_a) %>%
   arrange(laestab, time_period)
 
 # save file
