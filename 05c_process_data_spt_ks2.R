@@ -1371,7 +1371,6 @@ column_lookup_ks2 <- tibble(
     
     #  Maximise for number of observations AND similarity across measures (expected standards)
     "att_gps_avg_score",
-    "att_gps_avg_score",
     "att_gps_avg_score_boys", "att_gps_avg_score_girls",
     "att_gps_avg_score_lo", "att_gps_avg_score_mi", "att_gps_avg_score_hi", # not in 2023/24 onwards
     "att_gps_avg_score_eal",
@@ -1614,7 +1613,6 @@ column_lookup_ks2 <- tibble(
     #  2010/11 to 2011/12 - NA [no gps measure]
     #  2012/13 to 2014/15 - Percentage achieving Level 4B or above in gps test (att_gps_l4bplus)
     #  2015/16 to 2023/24 - Percentage of pupils reaching the expected standard in gps (att_gps_exp)
-    c("att_gps_avg_score"),
     c("att_gps_avg_score"),
     c("att_gps_avg_score_boys"), 
     c("att_gps_avg_score_girls"),
