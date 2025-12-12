@@ -29,6 +29,21 @@ get_year <- function(input_url){
 
 assign_dir_year <- function(x, input_url = "url") assign(x, file.path(dir_out, get_year(input_url)),envir=globalenv())
 
+# Function to identify term of release
+get_term <- function(input_url) {
+  parts <- unlist(strsplit(input_url, "[[:punct:]]"))
+  idx <- grep("autumn|spring|summer", parts, ignore.case = TRUE)
+  if (length(idx) > 0) {
+    term <- paste(parts[idx], collapse = "-")
+    term <- paste0(term, "-term")
+  } else {
+    term <- character(0)
+  }
+  return(term)
+}
+
+assign_dir_term <- function(x, input_url = "url") assign(x, file.path(dir_out, get_year(input_url), get_term(input_url)),envir=globalenv())
+
 # functions
 is.sequential <- function(x){
   all(abs(diff(x)) == 1)
@@ -142,18 +157,24 @@ download_data_from_url <- function(url) {
   # Create directory if needed
   if (!exists("dir_year")) {
     assign_dir_year("dir_year_data", url)
-    if (identical(dir_year_data, character(0))) {
+    if (length(dir_year_data) > 0 && nzchar(dir_year_data)) {
       message("No year information available. Skipping file ", tmp)
       return(NULL)
     } else {
-      if (!dir.exists(dir_year_data)) {
-        dir.create(dir_year_data)
-      }
+      if (!dir.exists(dir_year_data)) dir.create(dir_year_data, recursive = TRUE)
       dir_year <- dir_year_data
     }
   }
   
-  file_name <- file.path(dir_year, tmp)
+  # determine dir_release
+  dir_release <- 
+    # if character(0) then dir_release = dir_year
+    ifelse(identical(dir_term, character(0)), dir_year, 
+           # if dir_term != dir_year then dir_release = dir_term else dir_release = dir_year
+           ifelse(normalizePath(dir_term) != normalizePath(dir_year), dir_term, dir_year))
+  
+
+  file_name <- file.path(dir_release, tmp)
   
   message("Downloading file from URL...")
   message("\tURL: ", url)
@@ -174,7 +195,7 @@ download_data_from_url <- function(url) {
     tryCatch({
       zip_list <- zip::zip_list(file_name)
       if (nrow(zip_list) == 0) stop("Empty ZIP file")
-      zip::unzip(file_name, exdir = dir_year)
+      zip::unzip(file_name, exdir = dir_release)
       rm(zip_list)
       gc()
       
@@ -194,7 +215,7 @@ download_data_from_url <- function(url) {
       if (file.exists(file_name)) {
         warning("Failed to remove ZIP file after ", max_retries, " attempts. Please delete manually: ", file_name)
       }
-      message("Unzipped files are saved in: ", dir_year)
+      message("Unzipped files are saved in: ", unzip_dir)
     }, error = function(e) {
       warning("Unzip failed (", e$message, "). Keeping ZIP file for manual inspection.")
     })
@@ -377,9 +398,21 @@ webscrape_government_data <- function(dir_out = "path_to_directory",
       # release_url <- release_links[1]
       
       # get year 
-      assign_dir_year("dir_year", file.path(dir_out, get_year(release_url)))
+      assign_dir_year("dir_year", release_url)
       # create output dir
-      if (!dir.exists(dir_year)) dir.create(dir_year)
+      if (!dir.exists(dir_year)) dir.create(dir_year, recursive = TRUE)
+      
+      # get term
+      assign_dir_term("dir_term", release_url)
+      # if there is a term
+      if(length(dir_term) > 0 && nzchar(dir_term)){ 
+        # create output dir
+        if (!dir.exists(dir_term)) dir.create(dir_term, recursive = TRUE)
+        # define directory to download to
+        dir_release <- if (normalizePath(dir_term) != normalizePath(dir_year)) dir_term else dir_year
+      } else {
+        dir_release <- dir_year
+      }
       
       cat("\nReading content of release landing page", release_url, "\n")
       webpage <- read_html(release_url)
@@ -392,7 +425,7 @@ webscrape_government_data <- function(dir_out = "path_to_directory",
       
       if (has_download_zip) {
         cat("\nFound 'Download all data (ZIP)' button. Attempting automated download...\n")
-        download_data_via_button_chromote(release_url, download_dir = dir_year)
+        download_data_via_button_chromote(release_url, download_dir = dir_release)
       } else {
         
         # --- Fallback: Download from links as before ---
@@ -415,6 +448,10 @@ webscrape_government_data <- function(dir_out = "path_to_directory",
         # remove any csv-preview links
         download_links <- download_links[!grepl("csv-preview", download_links)]
         
+        # attempt one more way to get download links
+        if (length(download_links) == 0){
+          download_links <- absolute_links[grepl("/files?fromPage=ReleaseDownloads", absolute_links, fixed = T)]
+        }
 
         if (length(download_links) > 0) {
           cat("\nFound download links on release URL...\n")
