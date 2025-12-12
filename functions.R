@@ -215,7 +215,7 @@ download_data_from_url <- function(url) {
       if (file.exists(file_name)) {
         warning("Failed to remove ZIP file after ", max_retries, " attempts. Please delete manually: ", file_name)
       }
-      message("Unzipped files are saved in: ", unzip_dir)
+      message("Unzipped files are saved in: ", dir_release)
     }, error = function(e) {
       warning("Unzip failed (", e$message, "). Keeping ZIP file for manual inspection.")
     })
@@ -443,6 +443,7 @@ webscrape_government_data <- function(dir_out = "path_to_directory",
         # Filter the download links (e.g., links ending with .pdf)
         download_links <- absolute_links[grepl("\\.[a-zA-Z]+$|/files/", absolute_links)]
         download_links <- download_links[!grepl(".uk$", download_links)]
+        download_links <- download_links[!grepl(".com$", download_links)]
         download_links <- unique(download_links)
         
         # remove any csv-preview links
