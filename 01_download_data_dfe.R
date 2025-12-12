@@ -112,6 +112,8 @@ setup_environment <- function() {
 # This release includes information on teaching and support staff, their characteristics, 
 # teacher retention and pay, qualifications and details of the subjects taught in secondary schools.
 
+# https://explore-education-statistics.service.gov.uk/methodology/school-workforce-in-england
+
 # run all setups (reset environment)
 setup_environment()
 
@@ -325,3 +327,40 @@ if (length(failed_urls) > 0) {
   cat("\nAll URLs downloaded successfully.\n")
 }
 
+
+
+
+##### Suspensions and permanent exclusions in England #####
+
+# term releases since 2021/22 Autumn term
+# annual releases up to 2020/21
+# https://explore-education-statistics.service.gov.uk/find-statistics/suspensions-and-permanent-exclusions-in-england
+# https://explore-education-statistics.service.gov.uk/methodology/pupil-exclusion-statistics-methodology
+
+# run all setups (reset environment)
+setup_environment()
+
+# download data
+webscrape_government_data(dir_out =  file.path(dir_data, "suspensions-and-permanent-exclusions-in-england"),
+                          parent_url = "https://explore-education-statistics.service.gov.uk/find-statistics/suspensions-and-permanent-exclusions-in-england",
+                          pattern_to_match = glob2rx("*suspensions*exclusions*england/20*|*suspensions*-20*"))
+
+release_url = "https://explore-education-statistics.service.gov.uk/find-statistics/suspensions-and-permanent-exclusions-in-england/2016-17"
+
+##### Pupil absence in schools in England #####
+
+# termly releases
+# autumn term releases (published in May) since 2016/17
+# autumn and spring terms releases (published in October) since 2016/17
+# full academic year releases (published in March) since 2013/14
+
+# https://explore-education-statistics.service.gov.uk/find-statistics/pupil-absence-in-schools-in-england
+# https://explore-education-statistics.service.gov.uk/methodology/pupil-absence-statistics-methodology
+
+# run all setups (reset environment)
+setup_environment()
+
+# download data
+webscrape_government_data(dir_out =  file.path(dir_data, "pupil-absence-in-schools-in-england"),
+                          parent_url = "https://explore-education-statistics.service.gov.uk/find-statistics/pupil-absence-in-schools-in-england",
+                          pattern_to_match = glob2rx("*pupil-absence*england/20*|*pupil-absence*-20*"))
