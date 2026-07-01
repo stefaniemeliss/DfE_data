@@ -335,6 +335,9 @@ webscrape_government_data <- function(dir_out = "path_to_directory",
                                       parent_url = "url",
                                       pattern_to_match = "pattern"){
   
+  # Initialise the tracking vector
+  downloaded_links <- character(0)
+  
   # Resolve final URL before scraping
   parent_url_final <- get_final_url(parent_url)
   
@@ -426,6 +429,7 @@ webscrape_government_data <- function(dir_out = "path_to_directory",
       button_texts <- html_text(buttons, trim = TRUE)
       # Look for the button text (case-insensitive, ignore whitespace)
       has_download_zip <- any(grepl("^Download all data \\(ZIP?\\)$", button_texts, ignore.case = TRUE))
+      has_download_zip <- any(grepl("Download all data", button_texts, ignore.case = TRUE) & grepl("ZIP", button_texts, ignore.case = TRUE))
       
       if (has_download_zip) {
         cat("\nFound 'Download all data (ZIP)' button. Attempting automated download...\n")
@@ -434,10 +438,25 @@ webscrape_government_data <- function(dir_out = "path_to_directory",
         
         # --- Fallback: Download from links as before ---
         
+        # Extract all <a> tags and their attributes
+        link_nodes <- html_nodes(webpage, "a")
+        hrefs <- html_attr(link_nodes, "href")
+        texts <- html_text(link_nodes)
+        
+        # --- Robust ZIP link extraction ---
+        zip_link <- hrefs[grepl("Download all data", texts, ignore.case = TRUE) & grepl("ZIP", texts, ignore.case = TRUE)]
+        if (length(zip_link) > 0 && !is.na(zip_link) && !(zip_link %in% downloaded_links)) {
+          cat("\nFound 'Download all data (ZIP)' link. Attempting download...\n")
+          tryCatch({
+            download_data_from_url(url = zip_link)
+            downloaded_links <- c(downloaded_links, zip_link)
+          }, error = function(e) {
+            cat("Failed to download URL:", zip_link, "\nError message:", e$message, "\n")
+          })
+        }
+        
         # Extract all the links from the webpage
-        links <- webpage %>%
-          html_nodes("a") %>%  # Select all <a> tags
-          html_attr("href")    # Extract the href attribute
+        links <- hrefs  # links are the href attribute of all <a> tags
         
         # Apply function to resolve relative URLs to all links
         absolute_links <- sapply(links, function(link) {
@@ -462,7 +481,18 @@ webscrape_government_data <- function(dir_out = "path_to_directory",
           cat("\nFound download links on release URL...\n")
           cat("\t", download_links, sep = "\n\t")
           cat("\n")
-          invisible(sapply(download_links, download_data_from_url))
+          for (dl in download_links) {
+            if (dl %in% downloaded_links) {
+              cat("Skipping already downloaded link:", dl, "\n")
+              next
+            }
+            tryCatch({
+              download_data_from_url(url = dl)
+              downloaded_links <- c(downloaded_links, dl)
+            }, error = function(e) {
+              cat("Failed to download URL:", dl, "\nError message:", e$message, "\n")
+            })
+          }
         } else {
           cat("\nNo download buttons or links found for this release.\n")
         }
