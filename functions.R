@@ -102,6 +102,10 @@ get_final_url <- function(url) {
 
 # function to download data from an URL that directly links to a file
 download_data_from_url <- function(url) {
+  
+  # Defensive assignment for dir_term
+  if (!exists("dir_term", inherits = TRUE)) dir_term <- character(0)
+  
   headers = c(
     `user-agent` = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.5005.61 Safari/537.36'
   )
