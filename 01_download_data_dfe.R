@@ -119,7 +119,7 @@ setup_environment()
 
 # download data
 webscrape_government_data(dir_out =  file.path(dir_data, "school-workforce-in-england"),
-                          parent_url = "https://explore-education-statistics.service.gov.uk/find-statistics/school-workforce-in-england",
+                          parent_url = "https://explore-education-statistics.service.gov.uk/find-statistics/school-workforce-in-england/releases",
                           pattern_to_match = glob2rx("*school-workforce*england/20*|*school-workforce*november-20*"))
 
 
@@ -137,7 +137,7 @@ setup_environment()
 
 # download data
 webscrape_government_data(dir_out =  file.path(dir_data, "school-pupils-and-their-characteristics"),
-                          parent_url = "https://explore-education-statistics.service.gov.uk/find-statistics/school-pupils-and-their-characteristics",
+                          parent_url = "https://explore-education-statistics.service.gov.uk/find-statistics/school-pupils-and-their-characteristics/releases",
                           pattern_to_match = glob2rx("*school-pupils-and-their-characteristics/20*|*schools-pupils*20*"))
 
 
@@ -148,7 +148,7 @@ setup_environment()
 
 # download data
 webscrape_government_data(dir_out =  file.path(dir_data, "special-educational-needs-in-england"),
-                          parent_url = "https://explore-education-statistics.service.gov.uk/find-statistics/special-educational-needs-in-england",
+                          parent_url = "https://explore-education-statistics.service.gov.uk/find-statistics/special-educational-needs-in-england/releases",
                           pattern_to_match = glob2rx("*special-educational-needs-in-england/20*|*special-educational-needs-in-england-january-20**"))
 
 
@@ -165,7 +165,7 @@ if (!dir.exists(dir_out)) {
 
 # determine years of interest
 start <- 2010
-finish <- 2023
+finish <- 2024
 # start <- 2018
 # finish <- 2018
 
@@ -342,10 +342,8 @@ setup_environment()
 
 # download data
 webscrape_government_data(dir_out =  file.path(dir_data, "suspensions-and-permanent-exclusions-in-england"),
-                          parent_url = "https://explore-education-statistics.service.gov.uk/find-statistics/suspensions-and-permanent-exclusions-in-england",
+                          parent_url = "https://explore-education-statistics.service.gov.uk/find-statistics/suspensions-and-permanent-exclusions-in-england/releases",
                           pattern_to_match = glob2rx("*suspensions*exclusions*england/20*|*suspensions*-20*"))
-
-release_url = "https://explore-education-statistics.service.gov.uk/find-statistics/suspensions-and-permanent-exclusions-in-england/2016-17"
 
 ##### Pupil absence in schools in England #####
 
@@ -362,5 +360,5 @@ setup_environment()
 
 # download data
 webscrape_government_data(dir_out =  file.path(dir_data, "pupil-absence-in-schools-in-england"),
-                          parent_url = "https://explore-education-statistics.service.gov.uk/find-statistics/pupil-absence-in-schools-in-england",
+                          parent_url = "https://explore-education-statistics.service.gov.uk/find-statistics/pupil-absence-in-schools-in-england/releases",
                           pattern_to_match = glob2rx("*pupil-absence*england/20*|*pupil-absence*-20*"))
