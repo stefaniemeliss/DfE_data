@@ -72,13 +72,13 @@ dir_in <- file.path(dir_data, "performance-tables")
 # script variable definition #
 
 # determine year list (akin to other data sources)
-years_list <- paste0(20, 10:23, 11:24)
+years_list <- paste0(20, 10:24, 11:25)
 lookup <- data.frame(time_period = as.numeric(years_list),
                      academic_year = as.numeric(substr(years_list, 1, 4)))
 
 # determine years of interest
 start <- 2010
-finish <- 2023
+finish <- 2024
 
 # Define NA values first
 # NE - No entries: the school or college did not enter any pupils or students for the qualifications covered by the measure	
@@ -1014,6 +1014,16 @@ ks2 <- apply(ks2[, -idx], 2, as.numeric) %>% as.data.frame()
 
 # check urns and clean up data
 ks2 <- cleanup_data(data_in = ks2)
+
+# check NAs
+for (i in 1:length(unique(ks2$time_period))) {
+  
+  print(unique(ks2$time_period)[i])
+  
+  tmp <- apply(ks2[ks2$time_period == unique(ks2$time_period)[i], ], 2, function(x){sum(is.na(x))})
+  print(tmp[tmp == nrow(ks2[ks2$time_period == unique(ks2$time_period)[i], ])])
+}
+
 
 
 # Print summary of combined dataset

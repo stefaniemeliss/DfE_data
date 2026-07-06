@@ -71,7 +71,7 @@ dir_misc <- file.path(dir, "misc")
 # script variable definition #
 
 # determine year list (akin to other data sources)
-years_list <- paste0(20, 10:23, 11:24)
+years_list <- paste0(20, 10:24, 11:25)
 lookup <- data.frame(time_period = as.numeric(years_list),
                      academic_year = as.numeric(substr(years_list, 1, 4)))
 
@@ -89,7 +89,7 @@ names(spc)[names(spc) == "num_pup_boys"] <- "num_spc_boys"
 names(spc)[names(spc) == "num_pup_girls"] <- "num_spc_girls"
 names(spc)[names(spc) == "num_pup_fsm"] <- "num_pup_fsm_spc"
 names(spc)[names(spc) == "perc_pup_fsm"] <- "perc_pup_fsm_spc"
-names(spc)[names(spc) == "num_pup_tot_fsm_calc"] <- "num_pup_tot_fsm_calc_spc"
+names(spc)[names(spc) == "num_pup_tot_fsm_calc_performance_tables"] <- "num_pup_tot_fsm_calc_performance_tables_spc"
 names(spc)[names(spc) == "num_pup_efl"] <- "num_spc_efl"
 names(spc)[names(spc) == "num_pup_eal"] <- "num_spc_eal"
 names(spc)[names(spc) == "num_pup_ufl"] <- "num_spc_ufl"
@@ -301,11 +301,10 @@ avail <- check %>% group_by(time_period) %>%
     
     num_pup_fsm_spc = sum(is.na(num_pup_fsm_spc)),
     perc_pup_fsm_spc = sum(is.na(perc_pup_fsm_spc)),
-    num_pup_tot_fsm_calc_spc = sum(is.na(num_pup_tot_fsm_calc_spc)),    
     
     num_pup_fsm_performance_tables = sum(is.na(num_pup_fsm_performance_tables)),
     perc_pup_fsm_performance_tables = sum(is.na(perc_pup_fsm_performance_tables)),
-    num_pup_tot_fsm_calc_performance_tables = sum(is.na(num_pup_tot_fsm_calc_performance_tables)),
+    num_pup_tot_fsm_calc_performance_tables_spc = sum(is.na(num_pup_tot_fsm_calc_performance_tables_spc)),    
     
     num_pup_fsm_spt = sum(is.na(num_pup_fsm_spt)), # 2010/11 - 2013/14, 2018/19, 2020/21 - 2023/24 
     perc_pup_fsm_spt = sum(is.na(perc_pup_fsm_spt)), # 2010/11 - 2017/18
@@ -346,7 +345,7 @@ psych::describeBy(check$diff_num_pup_fsm_performance_tables, group = check$time_
 # perc_pup_fsm not reported in SPT from 2018/19 - 2023/24
 psych::describeBy(check$diff_perc_pup_fsm_performance_tables, group = check$time_period)
 
-# the data bove suggests that in 2016/17 and 2018/19 - 2023/24, the same FSM numbers and/or percentages (num_pup_fsm / perc_pup_fsm) were reported in SPC and SPT census
+# the data above suggests that in 2016/17 and 2018/19 - 2023/24, the same FSM numbers and/or percentages (num_pup_fsm / perc_pup_fsm) were reported in SPC and SPT census
 # hence, fill in any gaps in the data
 
 t <- c(201617, 201819, 201920, 202021, 202122, 202223, 202324, 202425)

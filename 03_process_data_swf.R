@@ -87,10 +87,9 @@ gias <- gias[!is.na(gias$laestab), ]
 gias <- gias[!duplicated(gias), c("laestab", "urn", "establishmentname")]
 names(gias) <- c("laestab", "urn_gias", "school")
 
-get_urns <- F
-
 # determine year list (akin to other data sources)
-years_list <- paste0(20, 10:24, 11:25)
+years_list <- paste0(20, 10:25, 11:26)
+year <- "2025"
 lookup <- data.frame(time_period = as.numeric(years_list),
                      academic_year = as.numeric(substr(years_list, 1, 4)))
 id_cols <- c("time_period", "urn")
@@ -101,13 +100,18 @@ id_cols <- c("time_period", "urn", "laestab", "school")
 # Pupil to teacher ratios - school level #
 
 # read in data
-ptr <- read.csv(file.path(dir_in, "2024", "data", "workforce_ptrs_2010_2024_sch.csv"))
+ptr <- read.csv(file.path(dir_in, year, "data", paste0("workforce_ptrs_2010_", year, "_sch.csv")))
 
 ptr <- ptr %>%
   # rename columns 
   rename_with(., ~tolower(gsub("X...", "", ., fixed = T))) %>% 
   # remove columns that are uninformative
   select(where(~length(unique(na.omit(.x))) > 1)) %>%
+  # replace x with NA
+  mutate(across(
+    where(is.character),
+    ~na_if(., "x")
+  )) %>%
   as.data.frame()
 
 
@@ -121,13 +125,17 @@ ptr <- cleanup_data(data_in = ptr)
 # Teacher absences - school level #
 
 # read in data
-abs <- read.csv(file.path(dir_in, "2024", "data", "sickness_absence_teachers_sch.csv"))
-
+abs <- read.csv(file.path(dir_in, year, "data", paste0("sickness_absence_teachers_2010_", year, "_sch.csv")))
 abs <- abs %>%
   # rename columns 
   rename_with(., ~tolower(gsub("X...", "", ., fixed = T))) %>% 
   # remove columns that are uninformative
   select(where(~length(unique(na.omit(.x))) > 1)) %>%
+  # replace x with NA
+  mutate(across(
+    where(is.character),
+    ~na_if(., "x")
+  )) %>%
   as.data.frame()
 
 # select columns
@@ -141,13 +149,18 @@ abs <- cleanup_data(data_in = abs)
 # Teacher pay - school level #
 
 # read in data
-pay <- read.csv(file.path(dir_in, "2024", "data", "workforce_teacher_pay_2010_2024_school.csv"))
+pay <- read.csv(file.path(dir_in, year, "data", paste0("workforce_teacher_pay_2010_", year, "_school.csv")))
 
 pay <- pay %>%
   # rename columns 
   rename_with(., ~tolower(gsub("X...", "", ., fixed = T))) %>% 
   # remove columns that are uninformative
   select(where(~length(unique(na.omit(.x))) > 1)) %>%
+  # replace x with NA
+  mutate(across(
+    where(is.character),
+    ~na_if(., "x")
+  )) %>%
   as.data.frame()
 
 # select columns
@@ -160,13 +173,18 @@ pay <- cleanup_data(data_in = pay)
 # Teacher vacancies - school level #
 
 # read in data
-vac <- read.csv(file.path(dir_in, "2024", "data", "vacancies_number_rate_sch_2010_2024.csv"))
+vac <- read.csv(file.path(dir_in, year, "data", paste0("vacancies_number_rate_sch_2010_", year, ".csv")))
 
 vac <- vac %>%
   # rename columns 
   rename_with(., ~tolower(gsub("X...", "", ., fixed = T))) %>% 
   # remove columns that are uninformative
   select(where(~length(unique(na.omit(.x))) > 1)) %>%
+  # replace x with NA
+  mutate(across(
+    where(is.character),
+    ~na_if(., "x")
+  )) %>%
   as.data.frame()
 
 # select columns
@@ -179,7 +197,7 @@ vac <- cleanup_data(data_in = vac)
 
 # Teacher turnover - school level #
 
-tto <- read.csv(file.path(dir_in, "2024", "data", "teacher_turnover_2010_2024_sch.csv"))
+tto <- read.csv(file.path(dir_in, year, "data", paste0("teacher_turnover_2010_", year, "_sch.csv")))
 
 # fix variable names
 names(tto) <- c("time_period", "time_identifier", "geographic_level", "country_code", "country_name",
@@ -196,6 +214,11 @@ tto <- tto %>%
   # drop columns
   # select(-c(school_type, teacher_fte_in_census_year, remained_in_the_same_school, left_the_state.funded_system, left_to_another_state.funded_school)) %>%
   select(-c(school_type)) %>%
+  # replace x with NA
+  mutate(across(
+    where(is.character),
+    ~na_if(., "x")
+  )) %>%
   as.data.frame()
 
 # check urns and clean up data
@@ -218,17 +241,51 @@ tto <- tto %>%
 # Size of the school workforce - school level #
 
 # read in data
-swf <- read.csv(file.path(dir_in, "2024", "data", "workforce_2010_2024_fte_hc_nat_reg_la_sch.csv"))
+swf1 <- read.csv(file.path(dir_in, "2024", "data", paste0("workforce_2010_2024_fte_hc_nat_reg_la_sch.csv")))
+swf2 <- read.csv(file.path(dir_in, year, "data", paste0("Workforce_", year, "_fte_hc_sch.csv")))
 
-swf <- swf %>%
+swf1 <- swf1 %>%
   # rename columns 
   rename_with(., ~tolower(gsub("X...", "", ., fixed = T))) %>% 
   # remove columns that are uninformative
   select(where(~length(unique(na.omit(.x))) > 1)) %>%
+  # replace x with NA
+  mutate(across(
+    where(is.character),
+    ~na_if(., "x")
+  )) %>%
+  # make all columns character
+  mutate(across(
+    .cols = -c(time_period, school_laestab, school_urn),
+    .fns = as.character
+  )) %>%
   as.data.frame()
 
 # select columns
-swf <- swf[, !grepl("fte_ft|fte_pt|hc_pt|hc_ft|code|type|region|la_", names(swf))]
+swf1 <- swf1[, !grepl("fte_ft|fte_pt|hc_pt|hc_ft|code|type|region|la_", names(swf1))]
+
+swf2 <- swf2 %>%
+  # rename columns 
+  rename_with(., ~tolower(gsub("X...", "", ., fixed = T))) %>% 
+  # # remove columns that are uninformative
+  # select(where(~length(unique(na.omit(.x))) > 1)) %>%
+  # replace x with NA
+  mutate(across(
+    where(is.character),
+    ~na_if(., "x")
+  )) %>%
+  # make all columns character
+  mutate(across(
+    .cols = -c(time_period, school_laestab, school_urn),
+    .fns = as.character
+  )) %>%
+  as.data.frame()
+
+# select columns
+swf2 <- swf2[, !grepl("fte_ft|fte_pt|hc_pt|hc_ft|code|type|region|la_", names(swf2))]
+
+# combine
+swf <- bind_rows(swf2, swf1)
 
 # check urns and clean up data
 swf <- cleanup_data(data_in = swf)
@@ -238,8 +295,8 @@ swf <- cleanup_data(data_in = swf)
 
 # Workforce teacher characteristics - school level #
 
-pattern_wtc <- "workforce_teacher_characteristics_school_201011_202425"
-dir_wtc <- file.path(dir_in, "2024", "supporting-files")
+pattern_wtc <- "workforce_teacher_characteristics_school_201011_202526"
+dir_wtc <- file.path(dir_in, year, "supporting-files")
 dir_tmp <- file.path(dir_wtc, pattern_wtc)
 
 unzip = F
@@ -325,15 +382,25 @@ teach_char <- teach_char %>%
   # replace spaces
   mutate(across(all_of(characteristics), ~gsub(" ", "_", .))) %>%
   # Add characteristic_group == "Total" & characteristic == "Total" for years where the information is not included
-  mutate(check = rowSums(teach_char[, characteristics] != "Total")) %>%
-  mutate(characteristic_group = ifelse(is.na(characteristic_group) & check == 0, "Total", characteristic_group)) %>%
-  mutate(characteristic = ifelse(is.na(characteristic) & check == 0, "Total", characteristic)) %>%
-  select(-check) %>%
+  mutate(
+    characteristic_group = if_else(grade != "Total", "grade",
+                                   if_else(sex != "Total", "sex", 
+                                           if_else(age_group != "Total", "age_group", 
+                                                   if_else(working_pattern != "Total", "working_pattern", 
+                                                           if_else(qts_status != "Total", "qts_status", 
+                                                                   if_else(on_route != "Total", "on_route", 
+                                                                           if_else(ethnicity_major != "Total", "ethnicity_major", "total"
+                                                                           )))))))
+  ) %>%
+  # mutate(check = rowSums(teach_char[, characteristics] != "Total")) %>%
+  # mutate(characteristic_group = ifelse(is.na(characteristic_group) & check == 0, "Total", characteristic_group)) %>%
+  # mutate(characteristic = ifelse(is.na(characteristic) & check == 0, "Total", characteristic)) %>%
+  # select(-check) %>%
   # re-compute the percentages 
   # determine total
   mutate(
-    hc_total = first(hc[characteristic_group == "Total" & characteristic == "Total"]),
-    fte_total = first(fte[characteristic_group == "Total" & characteristic == "Total"]),
+    hc_total = first(hc[characteristic_group == "total"]),
+    fte_total = first(fte[characteristic_group == "total"]),
     .by = c(time_period, urn)
   ) %>%
   # re-compute percentages

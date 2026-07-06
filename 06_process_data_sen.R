@@ -77,7 +77,7 @@ dir_misc <- file.path(dir, "misc")
 dir_in <- file.path(dir_data, "special-educational-needs-in-england")
 
 # determine year list (akin to other data sources)
-years_list <- paste0(20, 10:24, 11:25)
+years_list <- paste0(20, 10:25, 11:26)
 
 id_cols <- c("time_period", "urn")
 
@@ -113,7 +113,7 @@ if (rename_folders) {
 
 # determine years of interest
 start <- 2010 # no school level data for 2009-10
-finish <- 2024
+finish <- 2025
 
 files <- list.files(path = dir_in,
                     pattern = "UD|ud|nderlying",
@@ -278,6 +278,14 @@ sen <- sen[apply(sen[, -1:-5], 1, function(row) !all(is.na(row))), ]
 # check urns and clean up data
 sen <- cleanup_data(data_in = sen)
 
+# check NAs
+for (i in 1:length(unique(sen$time_period))) {
+  
+  print(unique(sen$time_period)[i])
+  
+  tmp <- apply(sen[sen$time_period == unique(sen$time_period)[i], ], 2, function(x){sum(is.na(x))})
+  print(tmp[tmp == nrow(sen[sen$time_period == unique(sen$time_period)[i], ])])
+}
 
 # Print summary of combined dataset
 cat("\n--- COMBINED PUPILS DATASET SUMMARY ---\n")

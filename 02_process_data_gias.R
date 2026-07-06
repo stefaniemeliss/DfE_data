@@ -108,18 +108,18 @@ file_stem <- get_file_stem()
 library(data.table)
 
 #### source: https://get-information-schools.service.gov.uk/Downloads ####
-stem <- "extract_gias_download_20251125"
-# date downloaded 25/11/2025
+stem <- "extract_gias_download_20260706"
+# date downloaded 06/07/2026
 # Establishment downloads (select all)
-# Establishment fields CSV
-# Establishment links CSV
+## Establishment fields CSV
+## Establishment links CSV
 
 # Establishment groups
 # All group data (select all)
-# SAT and MAT membership history CSV
-# All group records.csv
-# All group links records.csv
-# All group records with links.zip
+## SAT and MAT membership history CSV
+## All group records.csv
+## All group links records.csv
+## All group records with links.zip
 
 
 # process data #

@@ -81,13 +81,13 @@ dir_in <- file.path(dir_data, "school-pupils-and-their-characteristics")
 # script variable definition #
 
 # determine year list (akin to other data sources)
-years_list <- paste0(20, 10:23, 11:24)
+years_list <- paste0(20, 10:25, 11:26)
 lookup <- data.frame(time_period = as.numeric(years_list),
                      academic_year = as.numeric(substr(years_list, 1, 4)))
 
 # determine years of interest
 start <- 2010
-finish <- 2024
+finish <- 2025
 
 # Define NA values first
 na_values <- c(":", "z", "NULL", "Unknown", "x", "..", "", ">", "^")
@@ -140,7 +140,7 @@ files_pupils <- list.files(path = dir_in,
                            pattern = "school_level|School_level_school|Schools_Pupils_UD|pupil_characteristics_UD",
                            recursive = T,
                            full.names = T)
-files_pupils <- files_pupils[!grepl("Meta|meta|ncyear|class|census|TEMPLATE", files_pupils)]
+files_pupils <- files_pupils[!grepl("Meta|meta|ncyear|class|census|TEMPLATE|api", files_pupils)]
 files_pupils
 
 
@@ -167,7 +167,6 @@ column_lookup_pupils <- tibble(
     # Free School Meals (numbers only, no percentages)  
     "num_pup_fsm",
     "perc_pup_fsm",
-    "num_pup_tot_fsm_calc", # only avail from 2010/11 to 2012/13
     "num_pup_fsm_performance_tables",
     "perc_pup_fsm_performance_tables",
     "num_pup_tot_fsm_calc_performance_tables",
@@ -232,16 +231,16 @@ column_lookup_pupils <- tibble(
     c("number_of_key_stage_3_pupils_(years_7_to_9)", "number_of_key_stage_3_pupils__years_7_to_9_"), 
     c("number_of_key_stage_4_pupils_(years_10_and_11)", "number_of_key_stage_4_pupils__years_10_and_11_"),
     c("number_of_key_stage_5_pupils_(years_12_to_14)", "number_of_key_stage_5_pupils__years_12_to_14_"),
-
+    
     # Free School Meals - multiple variations (numbers only)
     c("number_of_pupils_known_to_be_eligible_for_free_school_meals", 
       "number_of_pupils_known_to_be_eligible_for_and_claiming_free_school_meals"),
     c("%_of_pupils_known_to_be_eligible_for_free_school_meals", 
       "%_of_pupils_known_to_be_eligible_for_and_claiming_free_school_meals"),
-    c("number_of_pupils_(used_for_fsm_calculation)"),
     c("number_of_pupils_known_to_be_eligible_for_free_school_meals_(performance_tables)"),
     c("%_of_pupils_known_to_be_eligible_for_free_school_meals_(performance_tables)"),
-    c("number_of_pupils_(used_for_fsm_calculation_in_performance_tables)"),
+    c("number_of_pupils_(used_for_fsm_calculation)",
+      "number_of_pupils_(used_for_fsm_calculation_in_performance_tables)"),
     
     # Language (numbers only)
     c("number_of_pupils_whose_first_language_is_known_or_believed_to_be_english"),
@@ -327,8 +326,8 @@ for (i in seq_along(start:finish)) {
   # subset to exclude any non-school level data
   tmp_p <- tmp_p %>% filter(urn != "" & urn != 0)
   
-  # remove school that was registered twice
-  tmp_p <- tmp_p[!(tmp_p$urn == 143840 & tmp_p$estab == 6008), ]
+  # # remove school that was registered twice
+  # tmp_p <- tmp_p[!(tmp_p$urn == 143840 & tmp_p$estab == 6008), ]
 
   # Store processed dataset in list with academic year (encoded as time_period) as name
   ud_all_p[[academic_year]] <- tmp_p
@@ -337,6 +336,7 @@ for (i in seq_along(start:finish)) {
   cat(paste("Processed", academic_year, "- Rows:", nrow(tmp_p), "Columns:", ncol(tmp_p), "\n"))
   
   rm(tmp_p)
+  gc()
 }
 
 # **BIND ALL DATASETS TOGETHER**
@@ -360,6 +360,15 @@ column_lookup_pupils$standard_name[! column_lookup_pupils$standard_name %in% nam
 
 # re-order columns
 ud_pupils <- ud_pupils[, column_lookup_pupils$standard_name]
+
+# check NAs
+for (i in 1:length(unique(ud_pupils$time_period))) {
+  
+  print(unique(ud_pupils$time_period)[i])
+
+  tmp <- apply(ud_pupils[ud_pupils$time_period == unique(ud_pupils$time_period)[i], ], 2, function(x){sum(is.na(x))})
+  print(tmp[tmp == nrow(ud_pupils[ud_pupils$time_period == unique(ud_pupils$time_period)[i], ])])
+}
 
 # replace NA in LAESTAB where possible
 ud_pupils$laestab <- ifelse(is.na(ud_pupils$laestab) & !is.na(ud_pupils$old_la_code) & !is.na(ud_pupils$estab),
@@ -422,7 +431,6 @@ check %>% group_by(time_period) %>%
     
     num_pup_fsm = sum(is.na(num_pup_fsm)),
     perc_pup_fsm = sum(is.na(perc_pup_fsm)),
-    num_pup_tot_fsm_calc = sum(is.na(num_pup_tot_fsm_calc)),
     num_pup_fsm_performance_tables = sum(is.na(num_pup_fsm_performance_tables)),
     perc_pup_fsm_performance_tables = sum(is.na(perc_pup_fsm_performance_tables)),
     num_pup_tot_fsm_calc_performance_tables = sum(is.na(num_pup_tot_fsm_calc_performance_tables))
@@ -451,7 +459,7 @@ check %>% group_by(time_period) %>%
 # This change aligned the calculation with other headline measures and simplified reporting, but it may have slightly altered the FSM percentage, particularly in schools with large numbers of pupils in nursery or post-16 provision.
 
 # re-calculate perc of pupils eligible for FSM
-check$perc_pup_fsm_RECALC <- ifelse(check$time_period %in% c(201011, 201112, 201213), round(check$num_pup_fsm / check$num_pup_tot_fsm_calc * 100, 1),
+check$perc_pup_fsm_RECALC <- ifelse(check$time_period %in% c(201011, 201112, 201213), round(check$num_pup_fsm / check$num_pup_tot_fsm_calc_performance_tables * 100, 1),
                                     round(check$num_pup_fsm / check$num_pup_total * 100, 1))
 # compute difference
 check$diff_perc_pup_fsm <- check$perc_pup_fsm - check$perc_pup_fsm_RECALC
@@ -505,14 +513,32 @@ column_lookup_class_size <- tibble(
     
     # Overall class size measures only
     "num_one_teacher_classes_size_1_30",
+    # "num_one_teacher_classes_size_1_30_prim",
+    # "num_one_teacher_classes_size_1_30_sec",
     "num_one_teacher_classes_size_31_35", 
+    # "num_one_teacher_classes_size_31_35_prim", 
+    # "num_one_teacher_classes_size_31_35_sec", 
     "num_one_teacher_classes_size_36_plus",
-    "total_num_one_teacher_class_size",
+    # "num_one_teacher_classes_size_36_plus_prim",
+    # "num_one_teacher_classes_size_36_plus_sec",
+    "total_num_one_teacher_classes",
+    # "total_num_one_teacher_classes_prim",
+    # "total_num_one_teacher_classes_sec",
     "num_pup_in_one_teacher_classes_size_1_30",
+    # "num_pup_in_one_teacher_classes_size_1_30_prim",
+    # "num_pup_in_one_teacher_classes_size_1_30_sec",
     "num_pup_in_one_teacher_classes_size_31_35",
+    # "num_pup_in_one_teacher_classes_size_31_35_prim",
+    # "num_pup_in_one_teacher_classes_size_31_35_sec",
     "num_pup_in_one_teacher_classes_size_36_plus", 
+    # "num_pup_in_one_teacher_classes_size_36_plus_prim", 
+    # "num_pup_in_one_teacher_classes_size_36_plus_sec", 
     "total_num_pup_in_one_teacher_classes",
-    "average_size_one_teacher_classes"
+    # "total_num_pup_in_one_teacher_classes_prim",
+    # "total_num_pup_in_one_teacher_classes_sec",
+    "average_size_one_teacher_classes"#,
+    # "average_size_one_teacher_classes_prim",
+    # "average_size_one_teacher_classes_sec"
   ),
   
   # All possible variations for each standard name
@@ -527,14 +553,36 @@ column_lookup_class_size <- tibble(
     
     # Overall class size measures - handle size notation variations (1-30, 31-35, 36+)
     c("number_of_classes_of_size_1-30_taught_by_one_teacher"),
+    # c("number_of_primary_classes_of_size_1-30_taught_by_one_teacher"),
+    # c("number_of_secondary_classes_of_size_1-30_taught_by_one_teacher"),
     c("number_of_classes_of_size_31-35_taught_by_one_teacher"),
+    # c("number_of_primary_classes_of_size_31-35_taught_by_one_teacher"),
+    # c("number_of_secondary_classes_of_size_31-35_taught_by_one_teacher"),
     c("number_of_classes_of_size_36+_taught_by_one_teacher"),
+    # c("number_of_primary_classes_of_size_36+_taught_by_one_teacher"),
+    # c("number_of_secondary_classes_of_size_36+_taught_by_one_teacher"),
+    
     c("total_number_of_classes_taught_by_one_teacher"),
+    # c("total_number_of_primary_classes_taught_by_one_teacher"),
+    # c("total_number_of_secondary_classes_taught_by_one_teacher"),
+    
     c("number_of_pupils_in_classes_of_size_1-30_taught_by_one_teacher"),
+    # c("number_of_pupils_in_primary_classes_of_size_1-30_taught_by_one_teacher"),
+    # c("number_of_pupils_in_secondary_classes_of_size_1-30_taught_by_one_teacher"),
     c("number_of_pupils_in_classes_of_size_31-35_taught_by_one_teacher"),
+    # c("number_of_pupils_in_primary_classes_of_size_31-35_taught_by_one_teacher"),
+    # c("number_of_pupils_in_secondary_classes_of_size_31-35_taught_by_one_teacher"),
     c("number_of_pupils_in_classes_of_size_36+_taught_by_one_teacher"),
+    # c("number_of_pupils_in_primary_classes_of_size_36+_taught_by_one_teacher"),
+    # c("number_of_pupils_in_secondary_classes_of_size_36+_taught_by_one_teacher"),
+    
     c("total_number_of_pupils_in_classes_taught_by_one_teacher"),
-    c("average_size_of_one_teacher_classes")
+    # c("total_number_of_pupils_in_primary_classes_taught_by_one_teacher"),
+    # c("total_number_of_pupils_in_secondary_classes_taught_by_one_teacher"),
+
+    c("average_size_of_one_teacher_classes")#,
+    # c("average_size_of_one_teacher_primary_classes"),
+    # c("average_size_of_one_teacher_secondary_classes")
   )
 )
 
@@ -597,6 +645,7 @@ for (i in seq_along(start:finish)) {
   cat(paste("Processed", academic_year, "- Rows:", nrow(tmp_c), "Columns:", ncol(tmp_c), "\n"))
   
   rm(tmp_c)
+  gc()
 }
 
 # **BIND ALL DATASETS TOGETHER**
@@ -617,6 +666,16 @@ ud_class_size <- bind_rows(ud_stan_c, .id = "academic_year")
 
 # re-order columns
 ud_class_size <- ud_class_size[, column_lookup_class_size$standard_name]
+
+# check NAs
+for (i in 1:length(unique(ud_class_size$time_period))) {
+  
+  print(i)
+  print(unique(ud_class_size$time_period)[i])
+  
+  tmp <- apply(ud_class_size[ud_class_size$time_period == unique(ud_class_size$time_period)[i], ], 2, function(x){sum(is.na(x))})
+  print(tmp[tmp == nrow(ud_class_size[ud_class_size$time_period == unique(ud_class_size$time_period)[i], ])])
+}
 
 # replace NA in LAESTAB where possible
 ud_class_size$laestab <- ifelse(is.na(ud_class_size$laestab) & !is.na(ud_class_size$old_la_code) & !is.na(ud_class_size$estab),

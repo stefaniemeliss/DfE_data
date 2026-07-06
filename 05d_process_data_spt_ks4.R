@@ -72,13 +72,13 @@ dir_in <- file.path(dir_data, "performance-tables")
 # script variable definition #
 
 # determine year list (akin to other data sources)
-years_list <- paste0(20, 10:23, 11:24)
+years_list <- paste0(20, 10:24, 11:25)
 lookup <- data.frame(time_period = as.numeric(years_list),
                      academic_year = as.numeric(substr(years_list, 1, 4)))
 
 # determine years of interest
 start <- 2010
-finish <- 2023
+finish <- 2024
 
 # Define NA values first
 # NE - No entries: the school or college did not enter any pupils or students for the qualifications covered by the measure	
@@ -127,13 +127,13 @@ for (i in seq_along(start:finish)) {
   # determine folder for academic year
   dir_year <- file.path(dir_in, academic_year)
   
-  if (year %in% c(2021:2023)) pattern <- "ks4_meta.xlsx" else pattern <- "ks4_meta.csv"
+  if (year %in% c(2021:2024)) pattern <- "ks4_meta.xlsx" else pattern <- "ks4_meta.csv"
   
   # read in meta data
-  file_meta <- list.files(path = dir_year, pattern = pattern, full.names = T, recursive = T)
+  file_meta <- list.files(path = dir_year, pattern = pattern, full.names = T, recursive = T, include.dirs	= T)
   
   # get meta data
-  if (year %in% c(2021:2023)) tmp <- xlsx::read.xlsx(file_meta, sheetIndex = 1) else tmp <- read.csv(file = file_meta)
+  if (year %in% c(2021:2024)) tmp <- xlsx::read.xlsx(file_meta, sheetIndex = 1) else tmp <- read.csv(file = file_meta)
   
   names(tmp) <- gsub("X...", "", tolower(names(tmp)), fixed = T)
   
@@ -831,6 +831,15 @@ ks4 <- apply(ks4, 2, as.numeric) %>% as.data.frame()
 
 # check urns and clean up data
 ks4 <- cleanup_data(data_in = ks4)
+
+# check NAs
+for (i in 1:length(unique(ks4$time_period))) {
+  
+  print(unique(ks4$time_period)[i])
+  
+  tmp <- apply(ks4[ks4$time_period == unique(ks4$time_period)[i], ], 2, function(x){sum(is.na(x))})
+  print(tmp[tmp == nrow(ks4[ks4$time_period == unique(ks4$time_period)[i], ])])
+}
 
 
 # Print summary of combined dataset

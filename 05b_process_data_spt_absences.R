@@ -72,13 +72,13 @@ dir_in <- file.path(dir_data, "performance-tables")
 # script variable definition #
 
 # determine year list (akin to other data sources)
-years_list <- paste0(20, 10:23, 11:24)
+years_list <- paste0(20, 10:24, 11:25)
 lookup <- data.frame(time_period = as.numeric(years_list),
                      academic_year = as.numeric(substr(years_list, 1, 4)))
 
 # determine years of interest
 start <- 2010
-finish <- 2023
+finish <- 2024
 
 # Define NA values first
 na_values <- c("SUPP", "NP", "")
