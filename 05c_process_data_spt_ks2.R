@@ -698,7 +698,7 @@ column_lookup_ks2 <- tibble(
     c("ptmat4b_m"),
     c("ptmat4b_h"),
     c("ptmat4b_fsmcla", "ptmat4b_fsm6cla1a"),
-    c("ptmat4b_notfsmcla", "ptreadx_notfsm6cla1a"),
+    c("ptmat4b_notfsmcla", "ptmat4b_notfsm6cla1a"),
     
     # Mathematics (Average scaled scores + Expected/High standard)
     c("mat_average"),
@@ -1051,12 +1051,16 @@ ks2$perc_ks2_girls <- ifelse(is.na(ks2$perc_ks2_girls),
 
 # SEN measures
 
+ks2$sen_check <- ks2$num_ks2_sen_e + ks2$num_ks2_sen_k == ks2$num_ks2_sen_ek
+ks2 %>% group_by(sen_check) %>% summarise(n = n())
+
 # compute totals
 ks2$num_ks2_sen_tot <- rowSums(ks2[, c("num_ks2_sen_a", "num_ks2_sen_ap", "num_ks2_sen_st", "num_ks2_sen_k", "num_ks2_sen_e")], na.rm = T)
 ks2$num_ks2_sen_high <- rowSums(ks2[, c("num_ks2_sen_st", "num_ks2_sen_e")], na.rm = T)
 ks2$num_ks2_sen_lower <- rowSums(ks2[, c("num_ks2_sen_a", "num_ks2_sen_ap", "num_ks2_sen_k")], na.rm = T)
 
 # compute percentages
+levels <- c("tot", "high", "lower", "e", "k", "ek")
 levels <- c("tot", "high", "lower")
 denominator <- "num_ks2"
 for (i in 1:length(levels)) {
@@ -1071,6 +1075,7 @@ ks2 <- ks2 %>%
   arrange(laestab, time_period)
 
 # delete more granular SEN data
+levels <- c("a", "ap", "st", "aps", "se", "apk")
 levels <- c("a", "ap", "st", "k", "e", "aps", "ek", "se", "apk")
 ks2[, paste0("num_ks2_sen_", levels)] <- NULL
 ks2[, paste0("perc_ks2_sen_", levels)] <- NULL
@@ -1099,7 +1104,7 @@ var <- "measures"
 
 t1 <- c(201011, 201112, 201213, 201314, 201415)
 v1 <- "levels"
-t2 <- c(201516, 201617, 201718, 201819, 202223, 202324)
+t2 <- c(201516, 201617, 201718, 201819, 202223, 202324, 202425)
 v2 <- "scaled_scores"
 
 ks2[, var] <- ifelse(ks2[, "time_period"] %in% t1, v1, 
