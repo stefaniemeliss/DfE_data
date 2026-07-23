@@ -16,50 +16,41 @@ library(data.table)
 # create function to source code
 source_code <- function(root_dir_name = "code", target_repo = "helper_functions", branch = "main", file_name = "file.R") {
   
-  # construct URL
+  # Construct the raw GitHub URL
   git_url <- paste0("https://raw.githubusercontent.com/stefaniemeliss/", target_repo, "/", branch, "/", file_name)
+  message("Trying to download: ", git_url)
   
-  # attempt to download from github
+  # Attempt to download from GitHub
   tempp_file <- tempfile(fileext = ".R")
-  message <- curl::curl_download(git_url, tempp_file, quiet = F)
+  download_success <- tryCatch({
+    curl::curl_download(git_url, tempp_file, quiet = FALSE)
+    TRUE
+  }, error = function(e) {
+    message("Download failed: ", e$message)
+    FALSE
+  })
   
-  if(!grepl("Error", message)) {
-    
-    # if successful, source file
+  if (download_success) {
+    # If successful, source file
     source(tempp_file)
-    remove(tempp_file)
-    
-  } else { # load local copy of file
-    
-    # Get the current working directory
+    unlink(tempp_file)
+  } else {
+    # Load local copy of file
     current_dir <- getwd()
-    
-    # Split the current directory into its components
     dir_components <- strsplit(current_dir, "/")[[1]]
-    
-    # Identify the root directory dynamically based on the provided root directory name
     root_index <- which(dir_components == root_dir_name)
     if (length(root_index) == 0) {
       stop(paste("Root directory", root_dir_name, "not found in the current path"))
     }
     root_dir <- do.call(file.path, as.list(dir_components[1:root_index]))
-    
-    # Identify the subdirectory one level below the root and construct its absolute path
     project_repo <- dir_components[root_index + 1]
     dir <- file.path(root_dir, project_repo)
-    
     if (target_repo != project_repo) {
-      dir <- gsub(project_repo, target_repo, dir) 
+      dir <- gsub(project_repo, target_repo, dir)
     }
-    
-    # Construct the full file path
     file_path <- file.path(dir, file_name)
-    
-    # Print the directory and file path for debugging
     print(paste("Directory:", dir))
     print(paste("File path:", file_path))
-    
-    # Source the file into the parent frame
     source(file_path, local = parent.frame())
   }
 }
@@ -170,10 +161,10 @@ column_lookup_census <- tibble(
     
     # Pupil roll counts
     "num_pup_tot", 
-    "num_pup_girls", 
-    "perc_pup_girls",
     "num_pup_boys", 
     "perc_pup_boys",
+    "num_pup_girls", 
+    "perc_pup_girls",
     
     # ===== SEN MEASURES =====
     # Old system pre-2014/15
@@ -200,10 +191,9 @@ column_lookup_census <- tibble(
     "num_pup_ufl",
     "perc_pup_ufl",
 
-    # Language measures
-    
     # Free School Meals measures
     "num_pup_fsm", # not in 2014/15 to 2017/18 and 2019/20 
+    "num_pup_nofsm", # only avail in 2010/11 - 2013/14 
     "perc_pup_fsm",  # only avail from 2010/11 to 2017/18
     "num_pup_tot_fsm_calc", # only avail from 2010/11 to 2013/14
     "num_pup_fsm6",
@@ -222,7 +212,7 @@ column_lookup_census <- tibble(
     c("time_period"),
     
     # Pupil roll counts
-    c("totpupsendn", "nor", "num_pup_total"),
+    c("totpupsendn", "nor", "num_pup_total"), # nor = number on roll
     c("norb"),
     c("pnorb"),
     c("norg"),
@@ -295,12 +285,10 @@ column_lookup_census <- tibble(
     c("pnumuncfl", "pnumunclf"),
     # c("totpupealdn"),
     
-    # Language measures
-    
     # Free School Meals measures
-    c("numfsm"),
+    c("numfsm"), c("numnofsm"),
     c("pnumfsm"),
-    c("totpupfsmdn"),
+    c("totpupfsmdn", "norfsm"),
     c("numfsmever", "fsm6"),
     c("pnumfsmever"),
     c("norfsmever")
@@ -379,6 +367,7 @@ for (i in seq_along(start:finish)) {
   
   # subset to exclude any non-school level data
   tmp <- tmp %>%
+    filter(! is.na(urn)) %>%
     filter(! toupper(urn) %in% c("NAT"))
   
   # make all columns numeric
@@ -423,6 +412,9 @@ census <- census[, column_lookup_census$standard_name]
 
 # Exclude rows that fully consist of NA values
 census <- census[apply(census[, -1:-5], 1, function(row) !all(is.na(row))), ]
+
+# Remove duplicates
+census <- census[! duplicated(census), ]
 
 # # check for any letters
 # sink("check.txt")
@@ -470,33 +462,68 @@ census <- census %>%
 check <- census[, grepl("urn|time|fsm|tot", names(census))]
 check$num_pup_sen_tot <- NULL
 
+# check the total number of pupils used for FSM calculations
+check$tot_fsm_calc <- (check$num_pup_fsm + check$num_pup_nofsm) - check$num_pup_tot_fsm_calc
+# for those years where it is available, there is no difference
+psych::describeBy(check$tot_fsm_calc, check$time_period)
+
+# fill in the gaps in total number of pupils used for FSM calculations
+census$num_pup_tot_fsm_calc <- ifelse(is.na(census$num_pup_tot_fsm_calc) & !is.na(census$num_pup_fsm) & !is.na(census$num_pup_nofsm), 
+                                     census$num_pup_fsm + census$num_pup_nofsm, census$num_pup_tot_fsm_calc)
+
+# fill in the gaps in number of pupils with FSM
+census$num_pup_fsm <- ifelse(is.na(census$num_pup_fsm) & !is.na(census$num_pup_tot_fsm_calc) & !is.na(census$num_pup_nofsm), 
+                                     census$num_pup_tot_fsm_calc - census$num_pup_nofsm, census$num_pup_fsm)
+
+# fill in the gaps in number of pupils without FSM
+census$num_pup_nofsm <- ifelse(is.na(census$num_pup_nofsm) & !is.na(census$num_pup_tot_fsm_calc) & !is.na(census$num_pup_fsm), 
+                                     census$num_pup_tot_fsm_calc - census$num_pup_fsm, census$num_pup_nofsm)
+
+# confirm that there are no instances left where gaps can be filled
+census %>% 
+  group_by(is.na(num_pup_fsm), is.na(num_pup_nofsm), is.na(num_pup_tot_fsm_calc)) %>%
+  summarise(n = n())
+
 # check data availability by year
-check %>% group_by(time_period) %>%
+census %>% group_by(time_period) %>%
   summarise(
     rows = sum(!is.na(urn_census)),
     
-    num_pup_fsm = sum(is.na(num_pup_fsm)),
-    perc_pup_fsm = sum(is.na(perc_pup_fsm)),
-    num_pup_tot_fsm_calc = sum(is.na(num_pup_tot_fsm_calc)),    
-    num_pup_fsm6 = sum(is.na(num_pup_fsm6)),
-    perc_pup_fsm6 = sum(is.na(perc_pup_fsm6)),
-    num_pup_tot_fsm6_calc = sum(is.na(num_pup_tot_fsm6_calc))
+    num_pup_tot = sum(!is.na(num_pup_tot)) / rows,
+    
+    num_pup_fsm = sum(!is.na(num_pup_fsm)) / rows,
+    num_pup_nofsm = sum(!is.na(num_pup_nofsm)) / rows,
+    perc_pup_fsm = sum(!is.na(perc_pup_fsm)) / rows,
+    num_pup_tot_fsm_calc = sum(!is.na(num_pup_tot_fsm_calc)) / rows,    
+    num_pup_fsm6 = sum(is.na(!num_pup_fsm6)) / rows,
+    perc_pup_fsm6 = sum(is.na(!perc_pup_fsm6)) / rows,
+    num_pup_tot_fsm6_calc = sum(!is.na(num_pup_tot_fsm6_calc)) / rows
   )
 
-# re-calculate perc of pupils eligible for FSM
-check$perc_pup_fsm_RECALC <- ifelse(check$time_period %in% c(201011, 201112, 201213), round(check$num_pup_fsm / check$num_pup_tot_fsm_calc * 100, 1),
-                                    round(check$num_pup_fsm / check$num_pup_tot * 100, 1))
+# re-calculate perc of pupils eligible for FSM for those years where number of pupils for FSM calc is avail
+check$perc_pup_fsm_RECALC <- ifelse(is.na(check$num_pup_tot_fsm_calc) & check$time_period %in% c(201011, 201112, 201213, 201314), NA,
+                                    ifelse(!is.na(check$num_pup_tot_fsm_calc) & check$time_period %in% c(201011, 201112, 201213, 201314), 
+                                           round(check$num_pup_fsm / check$num_pup_tot_fsm_calc * 100, 1),
+                                           round(check$num_pup_fsm / check$num_pup_tot * 100, 1)))
+
+check$perc_pup_fsm_RECALC <- ifelse(!is.na(check$num_pup_tot_fsm_calc) & check$time_period %in% c(201011, 201112, 201213, 201314), 
+                                           round(check$num_pup_fsm / check$num_pup_tot_fsm_calc * 100, 1), NA)
 
 # compute difference
 check$diff_perc_pup_fsm <- check$perc_pup_fsm - check$perc_pup_fsm_RECALC
 
 # check descriptives of diff
-psych::describe(check$diff_perc_pup_fsm)
-
+# shows that differences are negligible in those years where re-calculation was possible - YAY!
+# thereby, FSM is checked and confirmed for 2010/11 - 2013/14
+# for 2014/15 - 2017/18 only perc_pup_fsm is avail but not num_pup_fsm nor num_pup_tot_fsm_calc so can't be checked
+# for 2018/19, 2020/21 - 2024/25, only num_pup_fsm is avail but not perc_pup_fsm nor num_pup_tot_fsm_calc so can't be checked
+psych::describeBy(check$diff_perc_pup_fsm, check$time_period)
+check %>% group_by(diff_perc_pup_fsm) %>% summarise(n = n())
 
 # SEN measures #
 
 # compute number of NA obs per school per year
+census$col_count <- sum(grepl("num_pup_sen", names(census)))
 census$na_count <- apply(census[, grepl("num_pup_sen", names(census))], 1, function(row) sum(is.na(row)))
 census$zero_count <- apply(census[, grepl("num_pup_sen", names(census))], 1, function(row) sum(row == 0, na.rm = T))
 census$missing_count <- census$na_count + census$zero_count
@@ -522,7 +549,7 @@ census$num_pup_sen_st <- ifelse(census$time_period %in% c(201011, 201213, 201314
 
 
 # Compute total of pupils with SEN
-census[, "num_pup_sen_tot"] <- ifelse(census$missing_count != sum(grepl("num_pup_sen", names(census))),
+census[, "num_pup_sen_tot"] <- ifelse(census$missing_count != census$col_count,
                                       rowSums(census[, c("num_pup_sen_a", # School Action 2010/11 - 2013/14
                                                          "num_pup_sen_aps", # School Action Plus or Statement 2010/11 - 2013/14
                                                          "num_pup_sen_k", # SEN support 2014/15 - 2024/25
@@ -531,13 +558,44 @@ census[, "num_pup_sen_tot"] <- ifelse(census$missing_count != sum(grepl("num_pup
                                       NA)
 
 # Compute percentage of pupils with SEN
-census[, "perc_pup_sen_tot"] <- ifelse(census$missing_count != sum(grepl("perc_pup_sen", names(census))),
+census[, "perc_pup_sen_tot"] <- ifelse(census$missing_count != census$col_count,
                                       rowSums(census[, c("perc_pup_sen_a", # School Action 2010/11 - 2013/14
                                                          "perc_pup_sen_aps", # School Action Plus or Statement 2010/11 - 2013/14
                                                          "perc_pup_sen_k", # SEN support 2014/15 - 2024/25
                                                          "perc_pup_sen_e" # EHC 2014/15 - 2024/25 (until 2018/19, also included Statement)
                                                          )], na.rm = T),
                                       NA)
+
+# Compute total of pupils with high SEN
+census[, "num_pup_sen_high"] <- ifelse(census$missing_count != census$col_count,
+                                      rowSums(census[, c("num_pup_sen_st", # Statement 2010/11 - 2013/14
+                                                         "num_pup_sen_e" # EHC 2014/15 - 2024/25 (until 2018/19, also included Statement)
+                                      )], na.rm = T),
+                                      NA)
+
+# Compute percentage of pupils with high SEN
+census[, "perc_pup_sen_high"] <- ifelse(census$missing_count != census$col_count,
+                                      rowSums(census[, c("perc_pup_sen_st", # Statement 2010/11 - 2013/14
+                                                         "perc_pup_sen_e" # EHC 2014/15 - 2024/25 (until 2018/19, also included Statement)
+                                      )], na.rm = T),
+                                      NA)
+
+# Compute total of pupils with lower SEN
+census[, "num_pup_sen_lower"] <- ifelse(census$missing_count != census$col_count,
+                                      rowSums(census[, c("num_pup_sen_a", # School Action 2010/11 - 2013/14
+                                                         "num_pup_sen_ap", # School Action Plus or Statement 2010/11 - 2013/14
+                                                         "num_pup_sen_k" # SEN support 2014/15 - 2024/25
+                                      )], na.rm = T),
+                                      NA)
+
+# Compute percentage of pupils with lower SEN
+census[, "perc_pup_sen_lower"] <- ifelse(census$missing_count != census$col_count,
+                                      rowSums(census[, c("perc_pup_sen_a", # School Action 2010/11 - 2013/14
+                                                         "perc_pup_sen_ap", # School Action Plus or Statement 2010/11 - 2013/14
+                                                         "perc_pup_sen_k" # SEN support 2014/15 - 2024/25
+                                      )], na.rm = T),
+                                      NA)
+
 # override all values above 100 with 100
 census[, "perc_pup_sen_tot"] <- ifelse(census[, "perc_pup_sen_tot"] > 100, 100, census[, "perc_pup_sen_tot"])
 
