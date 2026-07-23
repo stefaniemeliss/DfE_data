@@ -149,7 +149,8 @@ abs <- cleanup_data(data_in = abs)
 # Teacher pay - school level #
 
 # read in data
-pay <- read.csv(file.path(dir_in, year, "data", paste0("workforce_teacher_pay_2010_", year, "_school.csv")))
+# pay <- read.csv(file.path(dir_in, year, "data", paste0("workforce_teacher_pay_2010_", year, "_school.csv")))
+pay <- read.csv(file.path(dir_in, year, "data", paste0("teacher_pay_school_swc_tps_merged.csv")))
 
 pay <- pay %>%
   # rename columns 
@@ -241,10 +242,9 @@ tto <- tto %>%
 # Size of the school workforce - school level #
 
 # read in data
-swf1 <- read.csv(file.path(dir_in, "2024", "data", paste0("workforce_2010_2024_fte_hc_nat_reg_la_sch.csv")))
-swf2 <- read.csv(file.path(dir_in, year, "data", paste0("Workforce_", year, "_fte_hc_sch.csv")))
+swf <- read.csv(file.path(dir_in, year, "data", paste0("Workforce_2010_2025_fte_hc_sch.csv")))
 
-swf1 <- swf1 %>%
+swf <- swf %>%
   # rename columns 
   rename_with(., ~tolower(gsub("X...", "", ., fixed = T))) %>% 
   # remove columns that are uninformative
@@ -256,42 +256,16 @@ swf1 <- swf1 %>%
   )) %>%
   # make all columns character
   mutate(across(
-    .cols = -c(time_period, school_laestab, school_urn),
-    .fns = as.character
+    .cols = -c(region_code, region_name, new_la_code, la_name, school_name, school_type),
+    .fns = as.numeric
   )) %>%
   as.data.frame()
 
 # select columns
-swf1 <- swf1[, !grepl("fte_ft|fte_pt|hc_pt|hc_ft|code|type|region|la_", names(swf1))]
-
-swf2 <- swf2 %>%
-  # rename columns 
-  rename_with(., ~tolower(gsub("X...", "", ., fixed = T))) %>% 
-  # # remove columns that are uninformative
-  # select(where(~length(unique(na.omit(.x))) > 1)) %>%
-  # replace x with NA
-  mutate(across(
-    where(is.character),
-    ~na_if(., "x")
-  )) %>%
-  # make all columns character
-  mutate(across(
-    .cols = -c(time_period, school_laestab, school_urn),
-    .fns = as.character
-  )) %>%
-  as.data.frame()
-
-# select columns
-swf2 <- swf2[, !grepl("fte_ft|fte_pt|hc_pt|hc_ft|code|type|region|la_", names(swf2))]
-
-# combine
-swf <- bind_rows(swf2, swf1)
+swf <- swf[, !grepl("fte_ft|fte_pt|hc_pt|hc_ft|code|type|region|la_", names(swf))]
 
 # check urns and clean up data
 swf <- cleanup_data(data_in = swf)
-
-
-
 
 # Workforce teacher characteristics - school level #
 
@@ -299,7 +273,7 @@ pattern_wtc <- "workforce_teacher_characteristics_school_201011_202526"
 dir_wtc <- file.path(dir_in, year, "supporting-files")
 dir_tmp <- file.path(dir_wtc, pattern_wtc)
 
-unzip = F
+unzip = T
 if (unzip) {
   # determine zipped folder
   zipped_folder <- list.files(path = dir_wtc, pattern = pattern_wtc, full.names = T)
