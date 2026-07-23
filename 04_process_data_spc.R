@@ -151,7 +151,7 @@ column_lookup_pupils <- tibble(
     "time_period", "urn", "laestab", "old_la_code", "estab", "school_name", 
     
     # Pupil counts (numbers only, no percentages)
-    "fte_pupils", "num_pup_total", "num_pup_boys", "num_pup_girls", 
+    "fte_pupils", "num_pup_tot", "num_pup_boys", "num_pup_girls", 
     "boarders_total", "boarders_boys", "boarders_girls", 
     
     # Key Stage and Year Group Measures (appears 2018-2025)
@@ -167,9 +167,10 @@ column_lookup_pupils <- tibble(
     # Free School Meals (numbers only, no percentages)  
     "num_pup_fsm",
     "perc_pup_fsm",
-    "num_pup_fsm_performance_tables",
-    "perc_pup_fsm_performance_tables",
-    "num_pup_tot_fsm_calc_performance_tables",
+    "num_pup_fsm_spt",
+    "perc_pup_fsm_spt",
+    "num_pup_tot_fsm_calc",
+    "num_pup_tot_fsm_calc_spt",
     
     # Language (numbers only)
     "num_pup_efl",
@@ -239,8 +240,8 @@ column_lookup_pupils <- tibble(
       "%_of_pupils_known_to_be_eligible_for_and_claiming_free_school_meals"),
     c("number_of_pupils_known_to_be_eligible_for_free_school_meals_(performance_tables)"),
     c("%_of_pupils_known_to_be_eligible_for_free_school_meals_(performance_tables)"),
-    c("number_of_pupils_(used_for_fsm_calculation)",
-      "number_of_pupils_(used_for_fsm_calculation_in_performance_tables)"),
+    c("number_of_pupils_(used_for_fsm_calculation)"),
+    c("number_of_pupils_(used_for_fsm_calculation_in_performance_tables)"),
     
     # Language (numbers only)
     c("number_of_pupils_whose_first_language_is_known_or_believed_to_be_english"),
@@ -422,18 +423,21 @@ ud_pupils$na_count <- NULL
 # check FSM numbers #
 
 # create df with fsm relevant data only
-check <- ud_pupils[, grepl("urn|time|fsm|tot", names(ud_pupils))]
+check <- ud_pupils[, grepl("urn|time|fsm|pup_tot", names(ud_pupils))]
 
 # check data availability by year
 check %>% group_by(time_period) %>%
   summarise(
     rows = sum(!is.na(urn_ud_pupils)),
     
-    num_pup_fsm = sum(is.na(num_pup_fsm)),
-    perc_pup_fsm = sum(is.na(perc_pup_fsm)),
-    num_pup_fsm_performance_tables = sum(is.na(num_pup_fsm_performance_tables)),
-    perc_pup_fsm_performance_tables = sum(is.na(perc_pup_fsm_performance_tables)),
-    num_pup_tot_fsm_calc_performance_tables = sum(is.na(num_pup_tot_fsm_calc_performance_tables))
+    num_pup_tot = sum(!is.na(num_pup_tot)) / rows,
+    
+    num_pup_fsm = sum(!is.na(num_pup_fsm)) / rows,
+    perc_pup_fsm = sum(!is.na(perc_pup_fsm)) / rows,
+    num_pup_tot_fsm_calc = sum(!is.na(num_pup_tot_fsm_calc)) / rows,
+    num_pup_fsm_spt = sum(!is.na(num_pup_fsm_spt)) / rows,
+    perc_pup_fsm_spt = sum(!is.na(perc_pup_fsm_spt)) / rows,
+    num_pup_tot_fsm_calc_spt = sum(!is.na(num_pup_tot_fsm_calc_spt)) / rows
   )
 
 # num/perc pupils eligible for FSM #
@@ -459,25 +463,36 @@ check %>% group_by(time_period) %>%
 # This change aligned the calculation with other headline measures and simplified reporting, but it may have slightly altered the FSM percentage, particularly in schools with large numbers of pupils in nursery or post-16 provision.
 
 # re-calculate perc of pupils eligible for FSM
-check$perc_pup_fsm_RECALC <- ifelse(check$time_period %in% c(201011, 201112, 201213), round(check$num_pup_fsm / check$num_pup_tot_fsm_calc_performance_tables * 100, 1),
-                                    round(check$num_pup_fsm / check$num_pup_total * 100, 1))
+check$perc_pup_fsm_RECALC <- round(check$num_pup_fsm / check$num_pup_tot * 100, 1)
+
 # compute difference
 check$diff_perc_pup_fsm <- check$perc_pup_fsm - check$perc_pup_fsm_RECALC
 
 # check descriptives of diff
-psych::describe(check$diff_perc_pup_fsm)
+# noticeable differences can be observed  for 2010/11 - 2012/13                              
+psych::describeBy(check$diff_perc_pup_fsm, check$time_period)
 
+
+check$perc_pup_fsm_RECALC2 <- ifelse(check$time_period %in% c(201011, 201112, 201213), round(check$num_pup_fsm / check$num_pup_tot_fsm_calc * 100, 1),
+                                    round(check$num_pup_fsm / check$num_pup_tot * 100, 1))
+# compute difference
+check$diff_perc_pup_fsm2 <- check$perc_pup_fsm - check$perc_pup_fsm_RECALC2
+
+# check descriptives of diff
+# all acceptable!!
+psych::describeBy(check$diff_perc_pup_fsm2, check$time_period)
 
 # num/perc pupils eligible for FSM (performance tables) #
 
-# re-calculate perc of pupils eligible for FSM (performance tables)
-check$perc_pup_fsm_performance_tables_RECALC <- round(check$num_pup_fsm_performance_tables / check$num_pup_tot_fsm_calc_performance_tables * 100, 1)
+# re-calculate perc of pupils eligible for FSM (performance tables) 
+check$perc_pup_fsm_spt_RECALC <- round(check$num_pup_fsm_spt / check$num_pup_tot_fsm_calc_spt * 100, 1)
 
 # compute difference
-check$diff_perc_pup_fsm_performance_tables <- check$perc_pup_fsm_performance_tables - check$perc_pup_fsm_performance_tables_RECALC
+check$diff_perc_pup_fsm_spt <- check$perc_pup_fsm_spt - check$perc_pup_fsm_spt_RECALC
 
 # check descriptives of diff
-psych::describe(check$diff_perc_pup_fsm_performance_tables)
+# all acceptable!!
+psych::describeBy(check$diff_perc_pup_fsm_spt, check$time_period)
 
 # Compare FSM numbers in SPC vs performance tables #
 
@@ -485,11 +500,11 @@ psych::describe(check$diff_perc_pup_fsm_performance_tables)
 # FSM (performance tables): Only includes pupils in ‘eligible year groups’ (reception to year 11, or 1 to 11 in special schools).
 
 # count
-check$diff_num_pup_fsm <- check$num_pup_fsm - check$num_pup_fsm_performance_tables
+check$diff_num_pup_fsm <- check$num_pup_fsm - check$num_pup_fsm_spt
 psych::describeBy(check$diff_num_pup_fsm, group = check$time_period)
 
 # percentage
-check$diff_perc_pup_fsm <- check$perc_pup_fsm - check$perc_pup_fsm_performance_tables
+check$diff_perc_pup_fsm <- check$perc_pup_fsm - check$perc_pup_fsm_spt
 psych::describeBy(check$diff_perc_pup_fsm, group = check$time_period)
 
 
