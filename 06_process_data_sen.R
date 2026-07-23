@@ -270,6 +270,9 @@ sen <- sen[, column_lookup_sen$standard_name]
 # Exclude rows that fully consist of NA values
 sen <- sen[apply(sen[, -1:-5], 1, function(row) !all(is.na(row))), ]
 
+# Remove duplicates
+sen <- sen[! duplicated(sen), ]
+
 # # check for any letters
 # sink("check.txt")
 # print(apply(sen, 2, function(x) { unique(regmatches(x, gregexpr("[A-Za-z]+", x)))   }))
@@ -312,11 +315,12 @@ sen <- sen %>%
 
 
 # compute number of NA obs per school per year
+sen$col_count <- sum(grepl("num_pup_sen", names(sen)))
 sen$na_count <- apply(sen[, grepl("num_pup_sen", names(sen))], 1, function(row) sum(is.na(row)))
 sen$zero_count <- apply(sen[, grepl("num_pup_sen", names(sen))], 1, function(row) sum(row == 0, na.rm = T))
 sen$missing_count <- sen$na_count + sen$zero_count
 
-sen[, "num_pup_sen"] <- ifelse(sen$missing_count != sum(grepl("num_pup_sen", names(sen))),
+sen[, "num_pup_sen"] <- ifelse(sen$missing_count != sen$col_count,
                                rowSums(sen[, c("num_pup_sen_a", # School Action 2010/11 - 2013/14
                                                "num_pup_sen_ap", # School Action Plus 2010/11 - 2013/14
                                                "num_pup_sen_st", # Statement 2010/11 - 2013/14
@@ -327,14 +331,14 @@ sen[, "num_pup_sen"] <- ifelse(sen$missing_count != sum(grepl("num_pup_sen", nam
                                                )], na.rm = T),
                                NA)
 
-# sen[, "num_pup_sen_high"] <- ifelse(!is.na(sen$num_pup_sen),
-#                                        rowSums(sen[, c("num_pup_sen_st", "num_pup_sen_e", "num_pup_sen_se")], na.rm = T),
-#                                        NA)
-# 
-# sen[, "num_pup_sen_lower"] <- ifelse(!is.na(sen$num_pup_sen),
-#                                         rowSums(sen[, c("num_pup_sen_a", "num_pup_sen_ap",
-#                                                            "num_pup_sen_k")], na.rm = T),
-#                                         NA)
+sen[, "num_pup_sen_high"] <- ifelse(!is.na(sen$num_pup_sen),
+                                       rowSums(sen[, c("num_pup_sen_st", "num_pup_sen_e", "num_pup_sen_se")], na.rm = T),
+                                       NA)
+
+sen[, "num_pup_sen_lower"] <- ifelse(!is.na(sen$num_pup_sen),
+                                        rowSums(sen[, c("num_pup_sen_a", "num_pup_sen_ap",
+                                                           "num_pup_sen_k")], na.rm = T),
+                                        NA)
 
 sen <- sen[, !grepl("_count", names(sen))]
 
