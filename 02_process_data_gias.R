@@ -36,50 +36,41 @@ gc()
 # create function to source code
 source_code <- function(root_dir_name = "code", target_repo = "helper_functions", branch = "main", file_name = "file.R") {
   
-  # construct URL
+  # Construct the raw GitHub URL
   git_url <- paste0("https://raw.githubusercontent.com/stefaniemeliss/", target_repo, "/", branch, "/", file_name)
+  message("Trying to download: ", git_url)
   
-  # attempt to download from github
+  # Attempt to download from GitHub
   tempp_file <- tempfile(fileext = ".R")
-  message <- curl::curl_download(git_url, tempp_file, quiet = F)
+  download_success <- tryCatch({
+    curl::curl_download(git_url, tempp_file, quiet = FALSE)
+    TRUE
+  }, error = function(e) {
+    message("Download failed: ", e$message)
+    FALSE
+  })
   
-  if(!grepl("Error", message)) {
-    
-    # if successful, source file
+  if (download_success) {
+    # If successful, source file
     source(tempp_file)
-    remove(tempp_file)
-    
-  } else { # load local copy of file
-    
-    # Get the current working directory
+    unlink(tempp_file)
+  } else {
+    # Load local copy of file
     current_dir <- getwd()
-    
-    # Split the current directory into its components
     dir_components <- strsplit(current_dir, "/")[[1]]
-    
-    # Identify the root directory dynamically based on the provided root directory name
     root_index <- which(dir_components == root_dir_name)
     if (length(root_index) == 0) {
       stop(paste("Root directory", root_dir_name, "not found in the current path"))
     }
     root_dir <- do.call(file.path, as.list(dir_components[1:root_index]))
-    
-    # Identify the subdirectory one level below the root and construct its absolute path
     project_repo <- dir_components[root_index + 1]
     dir <- file.path(root_dir, project_repo)
-    
     if (target_repo != project_repo) {
-      dir <- gsub(project_repo, target_repo, dir) 
+      dir <- gsub(project_repo, target_repo, dir)
     }
-    
-    # Construct the full file path
     file_path <- file.path(dir, file_name)
-    
-    # Print the directory and file path for debugging
     print(paste("Directory:", dir))
     print(paste("File path:", file_path))
-    
-    # Source the file into the parent frame
     source(file_path, local = parent.frame())
   }
 }
@@ -126,7 +117,7 @@ stem <- "extract_gias_download_20260706"
 
 # Establishment fields
 file_fields <- list.files(path = file.path(dir_misc, stem), pattern = "^edubasealldata", full.names = T)
-fields <- fread(file = file_fields)
+fields <- fread(file = file_fields, encoding = "Latin-1")
 
 # fix col names
 names(fields) <- tolower(names(fields))
@@ -134,7 +125,12 @@ names(fields) <- gsub("(", "", names(fields), fixed = T)
 names(fields) <- gsub(")", "", names(fields), fixed = T)
 names(fields) <- gsub(" ", "_", names(fields), fixed = T)
 
-fields$establishmentname <- iconv(fields$establishmentname, from = "latin1", to = "UTF-8")
+# convert all character columns to UTF-8
+char_colnames <- names(fields)[sapply(fields, is.character)] # Get the names of character columns
+for (col in char_colnames) {
+ # Apply iconv to each character column 
+  fields[[col]] <- iconv(fields[[col]], from = "latin1", to = "UTF-8")
+}
 
 # replace all "" with NA
 fields <- fields[, lapply(.SD, function(x) replace(x, which(x==""), NA))]
@@ -150,6 +146,7 @@ fields$la_code_str <- NULL
 # format dates
 fields[, opendate := as.Date(opendate, format = "%d-%m-%Y")]
 fields[, closedate := as.Date(closedate, format = "%d-%m-%Y")]
+fields[, censusdate := as.Date(censusdate, format = "%d-%m-%Y")]
 
 # fix religion #
 # Create a regex pattern to match Christian denominations
@@ -181,7 +178,7 @@ dt <- fields[, .SD, .SDcols =
 # define col name pattern
 p <- paste0(c(
   # school identifiers + info on estab type & status
-  "urn", "la_", "estab", "dfe", 
+  "urn", "la_", "estab", "dfe", "census",
   # open and close dates + reasons
   "open", "close", 
   # age of pupils            
@@ -189,7 +186,7 @@ p <- paste0(c(
   # characteristics of school
   "boarders", "relig", "dioc", "admiss", "special", "senpru", 
   # characteristics of pupils
-  "gender", "numberofpupils", "percentagefsm",
+  "gender", "numberofpupils", "percentagefsm", #"senstat", "sennostat",
   # info on trusts, federations and sponsors
   # "trust", "group_uid", "sponsor", "federation",
   "flag", "group_uid", #"sponsor", "federation",
@@ -214,7 +211,7 @@ setnames(dt, "la_number", "la_code")
 # select and re-order columns
 out <- dt[, .(
   # school identifiers + info on estab type & status
-  urn, laestab, dfe_number, la_code, establishmentnumber, establishmentname,
+  urn, laestab, dfe_number, la_code, establishmentnumber, establishmentname, censusdate,
   # estab status
   establishmentstatus, opendate, reasonestablishmentopened, closedate, reasonestablishmentclosed,
   # estab type
@@ -222,7 +219,7 @@ out <- dt[, .(
   # age of pupils
   phaseofeducation, statutorylowage, statutoryhighage, nurseryprovision, officialsixthform,
   # characteristics of pupils
-  gender, numberofpupils, percentagefsm,
+  gender, numberofpupils, percentagefsm, #senstat, sennostat,
   # characteristics of school
   senpru, specialclasses, boarders, religiouscharacter, religiouscharacter_christian, diocese, admissionspolicy,
   # admin
@@ -235,9 +232,16 @@ setorder(out, urn)
 
 # Establishment links #
 file_links <- list.files(path = file.path(dir_misc, stem), pattern = "links_edubasealldata", full.names = T)
-links <- fread(file = file_links)
+links <- fread(file = file_links, encoding = "Latin-1")
+
 names(links) <- tolower(names(links))
-links$linkname <- iconv(links$linkname, from = "latin1", to = "UTF-8")
+
+# convert all character columns to UTF-8
+char_colnames <- names(links)[sapply(links, is.character)] # Get the names of character columns
+for (col in char_colnames) {
+  # Apply iconv to each character column 
+  links[[col]] <- iconv(links[[col]], from = "latin1", to = "UTF-8")
+}
 
 # replace all "" with NA
 links <- links[, lapply(.SD, function(x) replace(x, which(x==""), NA))]
@@ -264,7 +268,7 @@ fwrite(out, file = file.path(dir_data, "data_gias_estab.csv"), bom = T)
 
 # read data
 file_groups <- list.files(path = file.path(dir_misc, stem), pattern = "academiesmatmembership", full.names = T)
-groups <- fread(file = file_groups)
+groups <- fread(file = file_groups, encoding = "Latin-1")
 
 # fix col names
 names(groups) <- tolower(names(groups))
@@ -273,8 +277,12 @@ names(groups) <- gsub(")", "", names(groups), fixed = T)
 names(groups) <- gsub(" ", "_", names(groups), fixed = T)
 setnames(groups, "la_code", "la_number")
 
-groups$establishmentname <- iconv(groups$establishmentname, from = "latin1", to = "UTF-8")
-groups$group_name <- iconv(groups$group_name, from = "latin1", to = "UTF-8")
+# convert all character columns to UTF-8
+char_colnames <- names(groups)[sapply(groups, is.character)] # Get the names of character columns
+for (col in char_colnames) {
+  # Apply iconv to each character column 
+  groups[[col]] <- iconv(groups[[col]], from = "latin1", to = "UTF-8")
+}
 
 # replace all "" with NA
 groups <- groups[, lapply(.SD, function(x) replace(x, which(x==""), NA))]
