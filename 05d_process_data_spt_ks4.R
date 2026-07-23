@@ -282,7 +282,7 @@ column_lookup_ks4 <- tibble(
     
     # SEN Support with or without EHC plan (2021/22 - 2023/24)
     # identifies pupils with special educational needs (SEN) including those with or without an EHC plan
-    "num_ks4_sen_all", "perc_ks4_sen_all",
+    "num_ks4_sen_ek", "perc_ks4_sen_ek",
     
     # # Old system pre-2014/15
     # "num_ks4_sen_sap", "perc_ks4_sen_sap",            # School Action Plus (2010/11 - 2014/15)
@@ -333,8 +333,18 @@ column_lookup_ks4 <- tibble(
     # GCSE results for English AND maths
     
     "em_ac", # Percentage of Key Stage 4 pupils achieving grades A*-C in both English and mathematics GCSEs
+    
     "em_94", # Percentage of pupils achieving standard passes (grades 9-4) in both English and mathematics GCSEs
+    "em_94_boys", "em_94_girls",
+    "em_94_lo", "em_94_mi", "em_94_hi",
+    "em_94_eal",
+    "em_94_disadv", "em_94_notdisadv",
+    
     "em_95", # Percentage of pupils achieving strong passes (grades 9-5) in both English and mathematics GCSEs
+    "em_95_boys", "em_95_girls",
+    "em_95_lo", "em_95_mi", "em_95_hi",
+    "em_95_eal",
+    "em_95_disadv", "em_95_notdisadv",
     
     ## English Baccalaureate (EBacc) ##
     
@@ -358,7 +368,9 @@ column_lookup_ks4 <- tibble(
     # shows how many pupils are studying a broad, academic curriculum up to age 16
     
     "ebacc_e", # Percentage of Key Stage 4 pupils entering all English Baccalaureate
+    "ebacc_e_boys", "ebacc_e_girls",
     "ebacc_e_lo", "ebacc_e_mi", "ebacc_e_hi",
+    "ebacc_e_eal",
     "ebacc_e_disadv", "ebacc_e_notdisadv",
     
     # Achievement
@@ -373,8 +385,12 @@ column_lookup_ks4 <- tibble(
     
     # after 2016/17
     "ebacc_94", # Percentage of pupils achieving the English Baccalaureate with standard passes (grades 9-4) in both English and maths and A*-C grades in the remaining elements
+    "ebacc_94_boys", "ebacc_94_girls",
+    "ebacc_94_eal",
     "ebacc_94_disadv", "ebacc_94_notdisadv",
     "ebacc_95", # Percentage of pupils achieving the English Baccalaureate with strong passes (grades 9-5) in both English and maths and A*-C grades in the remaining elements
+    "ebacc_95_boys", "ebacc_95_girls",
+    "ebacc_95_eal",
     "ebacc_95_disadv", "ebacc_95_notdisadv",
     
     # after 2017/18
@@ -448,9 +464,13 @@ column_lookup_ks4 <- tibble(
     # Average score for different subjects
     
     "att8eng",	# Average Attainment 8 score per pupil for English element
+    "att8eng_boys", "att8eng_girls",
+    "att8eng_eal",
     "att8eng_disadv", "att8eng_notdisadv",
     
     "att8mat",	# Average Attainment 8 score per pupil for mathematics element
+    "att8mat_boys", "att8mat_girls",
+    "att8mat_eal",
     "att8mat_disadv", "att8mat_notdisadv",
     
     # Total sum of Attainment 8 scores 
@@ -591,14 +611,34 @@ column_lookup_ks4 <- tibble(
     
     c("ptl2basics", "ptl2basics_ptq", "ptl2basics_ptq_ee", "ptl2basics_ll_ptq_ee"), # Percentage of Key Stage 4 pupils achieving grades A*-C in both English and mathematics GCSEs
     c("ptl2basics_94"), # Percentage of pupils achieving standard passes (grades 9-4) in both English and mathematics GCSEs
+    c("pbl2basics_94"),
+    c("pgl2basics_94"),
+    c("ptbasicslo_94"),
+    c("ptbasicsav_94"),
+    c("ptbasicshi_94"),
+    c("ptl2basicseal_94"),
+    c("ptfsm6cla1abasics_94"),
+    c("ptnotfsm6cla1abasics_94"),
+    
     c("ptl2basics_95"), # Percentage of pupils achieving strong passes (grades 9-5) in both English and mathematics GCSEs
+    c("pbl2basics_95"),
+    c("pgl2basics_95"),
+    c("ptbasicslo_95"),
+    c("ptbasicsav_95"),
+    c("ptbasicshi_95"),
+    c("ptl2basicseal_95"),
+    c("ptfsm6cla1abasics_95"),
+    c("ptnotfsm6cla1abasics_95"),
     
     ## Entering All English Baccalaureate Subjects ##
     
     c("ptebacc_e", "ptebacc_e_ptq", "ptebacc_e_ptq_ee"), 
+    c("pbebacc_e", "pbebacc_e_ptq", "pbebacc_e_ptq_ee"), 
+    c("pgebacc_e", "pgebacc_e_ptq", "pgebacc_e_ptq_ee"), 
     c("ptebacc_elo", "ptebacc_elo_ptq", "ptebacc_elo_ptq_ee"),
     c("ptebacc_eav", "ptebacc_eav_ptq", "ptebacc_eav_ptq_ee"),
     c("ptebacc_ehi", "ptebacc_ehi_ptq", "ptebacc_ehi_ptq_ee"),
+    c("ptebacc_eeal", "ptebacc_eeal_ptq", "ptebacc_eeal_ptq_ee"),
     c("ptebacc_efsm", "ptebacc_efsm_ptq", "ptebacc_efsm6cla1a_ptq_ee"),
     c("ptebacc_enfsm", "ptebacc_enfsm_ptq", "ptebacc_enfsm6cla1a_ptq_ee"),
     
@@ -615,9 +655,16 @@ column_lookup_ks4 <- tibble(
     
     # after 2016/17
     c("ptebacc_94"), # Percentage of pupils achieving the English Baccalaureate with standard passes (grades 9-4) in both English and maths and A*-C grades in the remaining elements
+    c("pbebacc_94"),
+    c("pgebacc_94"),
+    c("ptebacceal_94"),
     c("ptebacc_94_fsm6cla1a"),
     c("ptebacc_94_nfsm6cla1a"),
+    
     c("ptebacc_95"), # Percentage of pupils achieving the English Baccalaureate with strong passes (grades 9-5) in both English and maths and A*-C grades in the remaining elements
+    c("pbebacc_95"),
+    c("pgebacc_95"),
+    c("ptebacceal_95"),
     c("ptebacc_95_fsm6cla1a"),
     c("ptebacc_95_nfsm6cla1a"),
     
@@ -663,10 +710,16 @@ column_lookup_ks4 <- tibble(
     c("diffn_att8"),
     
     c("att8screng"), # Average Attainment 8 score per pupil for English element
+    c("att8screng_boys"), 
+    c("att8screng_girls"), 
+    c("att8screng_eal"),
     c("att8screng_fsm6cla1a"),
     c("att8screng_nfsm6cla1a"),
     
     c("att8scrmat"), # Average Attainment 8 score per pupil for mathematics element
+    c("att8scrmat_boys"), 
+    c("att8scrmat_girls"), 
+    c("att8scrmat_eal"),
     c("att8scrmat_fsm6cla1a"),
     c("att8scrmat_nfsm6cla1a"),
     
@@ -920,21 +973,21 @@ sum(ks4$num_ks4_sen_apk != ks4$num_ks4_sen_ap + ks4$num_ks4_sen_k, na.rm = T)
 ks4$num_ks4_sen_tot <- ifelse(ks4$time_period %in% c(201011, 201112, 201213, 201314), ks4$num_ks4_sen_aps,
                               ifelse(ks4$time_period %in% c(201415), ks4$num_ks4_sen_se + ks4$num_ks4_sen_apk,
                                      ifelse(ks4$time_period %in% c(201516, 201617, 201718, 201819), ks4$num_ks4_sen_se + ks4$num_ks4_sen_apk,
-                                            ifelse(ks4$time_period %in% c(202122, 202223, 202324), ks4$num_ks4_sen_e + ks4$num_ks4_sen_k,
+                                            ifelse(ks4$time_period %in% c(202122, 202223, 202324, 202425), ks4$num_ks4_sen_e + ks4$num_ks4_sen_k,
                                                    NA))))
-sum(ks4$num_ks4_sen_tot != ks4$num_ks4_sen_all, na.rm = T) # check
+sum(ks4$num_ks4_sen_tot != ks4$num_ks4_sen_ek, na.rm = T) # check
 
 # pupils on roll with highest level of need                   
 ks4$num_ks4_sen_high <- ifelse(ks4$time_period %in% c(201011, 201112, 201213, 201314), ks4$num_ks4_sen_st,
                                ifelse(ks4$time_period %in% c(201415), ks4$num_ks4_sen_se,
                                       ifelse(ks4$time_period %in% c(201516, 201617, 201718, 201819), ks4$num_ks4_sen_se,
-                                             ifelse(ks4$time_period %in% c(202122, 202223, 202324), ks4$num_ks4_sen_e,
+                                             ifelse(ks4$time_period %in% c(202122, 202223, 202324, 202425), ks4$num_ks4_sen_e,
                                                     NA))))
 # pupils on roll with lower levels of need
 ks4$num_ks4_sen_lower <- ifelse(ks4$time_period %in% c(201011, 201112, 201213, 201314), ks4$num_ks4_sen_ap,
                                 ifelse(ks4$time_period %in% c(201415), ks4$num_ks4_sen_apk,
                                        ifelse(ks4$time_period %in% c(201516, 201617, 201718, 201819), ks4$num_ks4_sen_apk,
-                                              ifelse(ks4$time_period %in% c(202122, 202223, 202324), ks4$num_ks4_sen_k,
+                                              ifelse(ks4$time_period %in% c(202122, 202223, 202324, 202425), ks4$num_ks4_sen_k,
                                                      NA))))
 sum(ks4$num_ks4_sen_tot != ks4$num_ks4_sen_high + ks4$num_ks4_sen_lower, na.rm = T) # check
 
@@ -955,7 +1008,7 @@ ks4 <- ks4 %>%
   arrange(laestab, time_period)
 
 # delete more granular SEN data
-levels <- c("aps", "ap", "st", "se", "apk", "k", "e", "all")
+levels <- c("aps", "ap", "st", "se", "apk", "k", "e", "ek")
 ks4[, paste0("num_ks4_sen_", levels)] <- NULL
 ks4[, paste0("perc_ks4_sen_", levels)] <- NULL
 
@@ -1022,7 +1075,7 @@ var <- "tag_caps"
 
 t1 <- c(201011, 201112, 201213, 201314, 201415)
 v1 <- "orig"
-t2 <- c(201516, 201617, 201718, 201819, 202122, 202223, 202324)
+t2 <- c(201516, 201617, 201718, 201819, 202122, 202223, 202324, 202425)
 v2 <- "approx"
 
 ks4[, var] <- ifelse(ks4[, "time_period"] %in% t1, v1, 
