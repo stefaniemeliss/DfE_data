@@ -155,7 +155,7 @@ column_lookup_pupils <- tibble(
     "num_pup_ks4", 
     "num_pup_ks5",
     
-    # Free School Meals (numbers only, no percentages)  
+    # Free School Meals (numbers and percentages)  
     "num_pup_fsm",
     "perc_pup_fsm",
     "num_pup_fsm_spt",
@@ -294,7 +294,7 @@ for (i in seq_along(start:finish)) {
                  quote = "\"",                  # Handle quoted fields
                  strip.white = TRUE,            # Remove whitespace
                  blank.lines.skip = TRUE,       # Skip empty lines
-                 encoding = "UTF-8",            # Handle encoding issues
+                 encoding = "Latin-1",          # Handle encoding issues
                  na.strings = na_values,        # IMPORTANT: Convert NA values during read
                  header = TRUE,                 # use column names from file
                  nrows = -1,                    # Read all rows
@@ -317,6 +317,10 @@ for (i in seq_along(start:finish)) {
   
   # subset to exclude any non-school level data
   tmp_p <- tmp_p %>% filter(urn != "" & urn != 0)
+  
+  # check if any school has more than one entry
+  if (nrow(tmp_p %>% group_by(urn) %>% filter(n() > 1)) != 0) message(sprintf("Data from %s has at least one URN with more than one entry.", academic_year))
+  if (nrow(tmp_p %>% group_by(laestab) %>% filter(n() > 1)) != 0) message(sprintf("Data from %s has at least one LAESTAB with more than one entry.", academic_year))
   
   # # remove school that was registered twice
   # tmp_p <- tmp_p[!(tmp_p$urn == 143840 & tmp_p$estab == 6008), ]
@@ -460,7 +464,8 @@ check$perc_pup_fsm_RECALC <- round(check$num_pup_fsm / check$num_pup_tot * 100, 
 check$diff_perc_pup_fsm <- check$perc_pup_fsm - check$perc_pup_fsm_RECALC
 
 # check descriptives of diff
-# noticeable differences can be observed  for 2010/11 - 2012/13                              
+# noticeable differences can be observed  for 2010/11 - 2012/13     
+# negligible differences (0-0.1) from 2013/14 onwards
 psych::describeBy(check$diff_perc_pup_fsm, check$time_period)
 
 
@@ -470,7 +475,7 @@ check$perc_pup_fsm_RECALC2 <- ifelse(check$time_period %in% c(201011, 201112, 20
 check$diff_perc_pup_fsm2 <- check$perc_pup_fsm - check$perc_pup_fsm_RECALC2
 
 # check descriptives of diff
-# all acceptable!!
+# only negligible differences (0-0.1) from 2013/14 throughout
 psych::describeBy(check$diff_perc_pup_fsm2, check$time_period)
 
 # num/perc pupils eligible for FSM (performance tables) #
@@ -482,13 +487,14 @@ check$perc_pup_fsm_spt_RECALC <- round(check$num_pup_fsm_spt / check$num_pup_tot
 check$diff_perc_pup_fsm_spt <- check$perc_pup_fsm_spt - check$perc_pup_fsm_spt_RECALC
 
 # check descriptives of diff
-# all acceptable!!
+# negligible differences (0-0.1) from 2013/14 onwards
 psych::describeBy(check$diff_perc_pup_fsm_spt, check$time_period)
 
 # Compare FSM numbers in SPC vs performance tables #
 
 # FSM (census): Includes all pupils on roll, including nursery and post-16.
 # FSM (performance tables): Only includes pupils in ‘eligible year groups’ (reception to year 11, or 1 to 11 in special schools).
+# all differences are positive, meaning that FSM (census) estimates are larger than FSM (performance table) estimates
 
 # count
 check$diff_num_pup_fsm <- check$num_pup_fsm - check$num_pup_fsm_spt
