@@ -6,3 +6,5 @@
 misc/*
 data/*
 *.txt
+*.log
+.ipynb_checkpoints/*
