@@ -589,8 +589,10 @@ fix_roundings <- function(var_nrd = "variable_not_rounded", var_rd = "variable_r
                           filter = vector,
                           rounding_factor = 5,
                           data_in = df_in) {
-  # select columns
-  tmp <- data_in[, c(identifier_columns, var_nrd, var_rd)]
+  # select rows and columns
+  tmp <- data_in[data_in[, col_to_filter] %in% filter, c(identifier_columns, var_nrd, var_rd)]
+  
+  tmp <- tmp[!is.na(tmp[, var_nrd]) & !is.na(tmp[, var_rd]), ]
   
   # compute difference in raw values
   tmp$diff <- tmp[, var_nrd] - tmp[, var_rd]
@@ -610,6 +612,40 @@ fix_roundings <- function(var_nrd = "variable_not_rounded", var_rd = "variable_r
   } else {
     tmp[, paste0(var_rd, "_orig")] <- tmp[, var_rd] # copy original unrounded values
     tmp[, var_rd] <- tmp$test
+  }
+  
+  return(tmp)
+}
+
+
+fix_roundings <- function(var_nrd = "variable_not_rounded", var_rd = "variable_rounded",
+                          new_var = "",
+                          identifier_columns = "id_cols",
+                          col_to_filter = "col_name",
+                          filter = vector(),
+                          rounding_factor = 5,
+                          data_in = df_in) {
+  # Copy input data to avoid modifying in place
+  tmp <- data_in[, c(identifier_columns, var_nrd, var_rd)]
+  
+  # Compute difference in raw values
+  tmp$diff <- tmp[[var_nrd]] - tmp[[var_rd]]
+  
+  # Round variable currently not rounded
+  tmp$rd <- round(tmp[[var_nrd]] / rounding_factor) * rounding_factor
+  
+  # Replace any instances of rounded values with unrounded values (for all rows)
+  tmp$test <- ifelse(!is.na(tmp[[var_nrd]]) & tmp[[var_nrd]] != 0 & tmp[[col_to_filter]] %in% filter, tmp[[var_nrd]], tmp[[var_rd]])
+  
+  # Compute diff after replacing rounded values with unrounded values
+  tmp$diff2 <- tmp[[var_nrd]] - tmp$test
+  
+  # Assign the new variable as requested
+  if (new_var != "") {
+    tmp[[new_var]] <- ifelse(tmp[[col_to_filter]] %in% filter, tmp[[var_nrd]], tmp[[var_rd]])
+  } else {
+    tmp[[paste0(var_rd, "_orig")]] <- tmp[[var_rd]] # copy original unrounded values
+    tmp[[var_rd]] <- ifelse(tmp[[col_to_filter]] %in% filter, tmp[[var_nrd]], tmp[[var_rd]])
   }
   
   return(tmp)
@@ -698,7 +734,7 @@ create_urn_laestab_lookup <- function(data_in = df, original_name = NULL) {
     as.data.frame()
   
   # print information on whether all school urns were correct into console
-  message("Note that ", sum(ids$urn_in_gias == F), " urn(s) out of ", nrow(ids), " were NOT found in GIAS.")
+  message("Note that ", sum(ids$urn_in_gias == F), " urn(s) out of ", nrow(ids), " were NOT found in GIAS:", paste(ids$school_urn[ids$urn_in_gias == F]))
   
   # create id lookup table for each urn #
   # df with the following columns:
@@ -910,3 +946,5 @@ standardise_column_names <- function(df, lookup = reverse_lookup) {
   
   return(df_filtered)
 }
+
+
