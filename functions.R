@@ -100,40 +100,73 @@ get_final_url <- function(url) {
   }
 }
 
+# Function that converts the zip filename into a sensible folder name
+infer_dir_from_filename <- function(filename, base_dir = getwd()) {
+  stem <- tools::file_path_sans_ext(basename(filename))
+  stem <- stringr::str_squish(stem)
+  
+  # Convert 2018-2019 -> 2018-19
+  if (grepl("^\\d{4}-\\d{4}$", stem)) {
+    start_year <- sub("^(\\d{4})-\\d{4}$", "\\1", stem)
+    end_year   <- sub("^\\d{4}-(\\d{4})$", "\\1", stem)
+    end_2d     <- substr(end_year, 3, 4)
+    return(file.path(base_dir, paste0(start_year, "-", end_2d)))
+  }
+  
+  # Already in academic-year format: 2018-19
+  if (grepl("^\\d{4}-\\d{2}$", stem)) {
+    return(file.path(base_dir, stem))
+  }
+  
+  # Fallback: use the stem as-is
+  file.path(base_dir, stem)
+}
+
 # function to download data from an URL that directly links to a file
-download_data_from_url <- function(url) {
+download_data_from_url <- function(url, academic_year = NULL, parent_url = NULL) {
   
   # Defensive assignment for dir_term
   if (!exists("dir_term", inherits = TRUE)) dir_term <- character(0)
   
-  headers = c(
-    `user-agent` = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.5005.61 Safari/537.36'
+  headers <- c(
+    `user-agent` = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.5005.61 Safari/537.36"
   )
   
   max_attempts <- 5
   successful <- FALSE
   
-  for (attempt in 1:max_attempts) {
+  for (attempt in seq_len(max_attempts)) {
     message(sprintf("Attempt %d to download: %s", attempt, url))
-    request <- try(httr::GET(url = url, httr::add_headers(.headers = headers)), silent = TRUE)
+    
+    request <- try(
+      httr::GET(url = url, httr::add_headers(.headers = headers)),
+      silent = TRUE
+    )
     
     if (inherits(request, "try-error")) {
-      message(sprintf("HTTP request failed on attempt %d with an error. Retrying in %d seconds...", attempt, 2^(attempt-1)))
-      Sys.sleep(2^(attempt-1))
-    } else {
-      status_code <- httr::status_code(request)
-      if (status_code != 200) {
-        if (status_code == 404) {
-          message(sprintf("HTTP 404 error on attempt %d: URL likely invalid. Aborting.", attempt))
-          stop("URL Error: 404 Not Found")
-        } else {
-          message(sprintf("HTTP status %d on attempt %d. Retrying in %d seconds...", status_code, attempt, 2^(attempt-1)))
-          Sys.sleep(2^(attempt-1))
-        }
+      message(sprintf(
+        "HTTP request failed on attempt %d. Retrying in %d seconds...",
+        attempt, 2^(attempt - 1)
+      ))
+      Sys.sleep(2^(attempt - 1))
+      next
+    }
+    
+    status_code <- httr::status_code(request)
+    
+    if (status_code != 200) {
+      if (status_code == 404) {
+        stop(sprintf("HTTP 404 error on attempt %d: URL likely invalid.", attempt))
       } else {
-        successful <- TRUE
-        break
+        message(sprintf(
+          "HTTP status %d on attempt %d. Retrying in %d seconds...",
+          status_code, attempt, 2^(attempt - 1)
+        ))
+        Sys.sleep(2^(attempt - 1))
       }
+    } else {
+      successful <- TRUE
+      break
     }
   }
   
@@ -142,42 +175,80 @@ download_data_from_url <- function(url) {
   }
   
   # Determine filename from headers or URL
-  input <- request$headers$`content-disposition`
-  if (!is.null(input) && nzchar(input)) {
-    if (grepl("'", input, perl = TRUE)) {
-      tmp <- sub(".*'", "", input)
-      tmp <- sub("%2F", "_", tmp)
-    } else {
-      tmp <- sub('[^\"]+\"([^\"]+).*', '\\1', input)
-    }
-    if (nchar(tmp) > 100) {
-      tmp <- gsub("_20", "", tmp)
-    }
+  content_disposition <- request$headers$`content-disposition`
+  
+  if (!is.null(content_disposition) && nzchar(content_disposition)) {
+    tmp <- sub('.*filename="?([^";]+)"?.*', "\\1", content_disposition)
+    tmp <- utils::URLdecode(tmp)
+    tmp <- basename(tmp)
   } else {
     message("Warning: 'content-disposition' header missing. Using default filename.")
     tmp <- paste0("download_", basename(url))
   }
   
-  # Create directory if needed
-  if (!exists("dir_year")) {
-    assign_dir_year("dir_year_data", url)
-    if (length(dir_year_data) > 0 && nzchar(dir_year_data)) {
-      message("No year information available. Skipping file ", tmp)
-      return(NULL)
+  # Historic accountability data:
+  # save zip directly into dir_out, because the archive already contains year folders
+  if (exists("parent_url", inherits = TRUE) &&
+      grepl("historic-accountability-data", parent_url)) {
+    
+    dir_release <- dir_out
+    
+  } else {
+    
+    # Create / determine year directory if needed
+    dir_year_missing <- !exists("dir_year") ||
+      length(dir_year) == 0 ||
+      is.na(dir_year) ||
+      !nzchar(dir_year)
+    
+    if (dir_year_missing) {
+      if (!is.null(academic_year) && !is.na(academic_year) && nzchar(academic_year)) {
+        dir_year <- file.path(dir_out, academic_year)
+      } else {
+        assign_dir_year("dir_year_data", url)
+        
+        if (exists("dir_year_data") &&
+            length(dir_year_data) > 0 &&
+            !is.na(dir_year_data) &&
+            nzchar(dir_year_data)) {
+          dir_year <- dir_year_data
+        } else {
+          stop("Could not determine directory for: ", url)
+        }
+      }
+    }
+    
+    # determine dir_release safely
+    if (identical(dir_term, character(0)) ||
+        length(dir_term) == 0 ||
+        is.na(dir_term) ||
+        !nzchar(dir_term)) {
+      
+      dir_release <- dir_year
+      
+    } else if (is.na(dir_year) || !nzchar(dir_year)) {
+      
+      dir_release <- dir_term
+      
+    } else if (normalizePath(dir_term, winslash = "/", mustWork = FALSE) !=
+               normalizePath(dir_year, winslash = "/", mustWork = FALSE)) {
+      
+      dir_release <- dir_term
+      
     } else {
-      if (!dir.exists(dir_year_data)) dir.create(dir_year_data, recursive = TRUE)
-      dir_year <- dir_year_data
+      
+      dir_release <- dir_year
     }
   }
   
-  # determine dir_release
-  dir_release <- 
-    # if character(0) then dir_release = dir_year
-    ifelse(identical(dir_term, character(0)), dir_year, 
-           # if dir_term != dir_year then dir_release = dir_term else dir_release = dir_year
-           ifelse(normalizePath(dir_term) != normalizePath(dir_year), dir_term, dir_year))
+  if (is.na(dir_release) || !nzchar(dir_release)) {
+    stop("dir_release is invalid: ", dir_release)
+  }
   
-
+  if (!dir.exists(dir_release)) {
+    dir.create(dir_release, recursive = TRUE)
+  }
+  
   file_name <- file.path(dir_release, tmp)
   
   message("Downloading file from URL...")
@@ -187,8 +258,8 @@ download_data_from_url <- function(url) {
   bin <- httr::content(request, "raw")
   writeBin(bin, file_name)
   
-  while (!file.exists(file_name)) {
-    Sys.sleep(1)
+  if (!file.exists(file_name)) {
+    stop("Download failed: file was not written to disk: ", file_name)
   }
   
   message("Download complete: ", basename(file_name))
@@ -196,15 +267,18 @@ download_data_from_url <- function(url) {
   # Unzip if ZIP file
   if (grepl("\\.zip$", file_name, ignore.case = TRUE)) {
     message("Unzipping file: ", basename(file_name))
+    
     tryCatch({
       zip_list <- zip::zip_list(file_name)
       if (nrow(zip_list) == 0) stop("Empty ZIP file")
+      
       zip::unzip(file_name, exdir = dir_release)
+      
       rm(zip_list)
       gc()
       
       max_retries <- 3
-      for (i in 1:max_retries) {
+      for (i in seq_len(max_retries)) {
         if (file.exists(file_name)) {
           removal_status <- file.remove(file_name)
           if (removal_status) {
@@ -216,16 +290,22 @@ download_data_from_url <- function(url) {
           break
         }
       }
+      
       if (file.exists(file_name)) {
-        warning("Failed to remove ZIP file after ", max_retries, " attempts. Please delete manually: ", file_name)
+        warning(
+          "Failed to remove ZIP file after ", max_retries,
+          " attempts. Please delete manually: ", file_name
+        )
       }
+      
       message("Unzipped files are saved in: ", dir_release)
+      
     }, error = function(e) {
       warning("Unzip failed (", e$message, "). Keeping ZIP file for manual inspection.")
     })
   }
   
-  return(invisible(file_name))
+  invisible(file_name)
 }
 
 # function to automate downloading data via a button that triggers JavaScript (where the download link isn't in the HTML) using chromote
@@ -366,24 +446,58 @@ webscrape_government_data <- function(dir_out = "path_to_directory",
     resolve_url(parent_url, link)
   })
   
-  # check if there are any application/octet-stream absolute_links
-  download_links <-  unique(absolute_links[grepl("/files$", absolute_links)])
-  # download_links <-  unique(absolute_links[grepl("/files$|content.explore|data-catalogue", absolute_links)])
-  # download_links <-  unique(absolute_links[grepl("/files", absolute_links)])
+  
+  # Filter the links using the specified pattern
+  if(grepl("historic-accountability-data", parent_url)) {
+    
+    # get all items from the release list
+    items <- webpage %>% html_elements("li[data-testid='release-data-list-item']")
+    
+    # create df that contains download links as well as info on academic year etc
+    release_df <- map_dfr(items, function(x) {
+      title <- x %>% html_element("h4") %>% html_text2()
+      desc  <- x %>% html_element("p")  %>% html_text2()
+      href  <- x %>% html_element("a")  %>% html_attr("href")
+      
+      tibble(
+        academic_year = stringr::str_remove(title, "\\s*Accountability Data$"),
+        title = title,
+        description = desc,
+        download_url = href
+      )
+    })
+    
+    # filter using pattern_to_match
+    download_links <- release_df %>%
+      filter(academic_year >= pattern_to_match) %>%
+      pull(download_url)
+    
+  } else {
+    # check if there are any application/octet-stream absolute_links
+    download_links <-  unique(absolute_links[grepl("/files$", absolute_links)])
+    # download_links <-  unique(absolute_links[grepl("/files$|content.explore|data-catalogue", absolute_links)])
+    # download_links <-  unique(absolute_links[grepl("/files", absolute_links)])
+    
+  }
+  
 
   if (identical(download_links, character(0)) == F) {
     cat("\nFound download links on parent URL...\n")
     cat("\t", download_links, sep = "\n\t")
     cat("\n")
     # if so, download
-    invisible(sapply(download_links, download_data_from_url))
+    invisible(sapply(download_links, function(x) download_data_from_url(url = x, parent_url = parent_url)))
+    
+    # finish execution
+    if(grepl("historic-accountability-data", parent_url)) return(invisible(NULL))
+    
   }
   
   # Filter the links using the specified pattern
   release_links <- unique(absolute_links[grepl(pattern_to_match, absolute_links)])
-  
   # remove some urls from list
   release_links <- release_links[!grepl("data-guidance|prerelease-access-list", release_links)]
+  
   
   # check if there are any matching links
   if (identical(release_links, character(0)) == T) {
@@ -448,7 +562,7 @@ webscrape_government_data <- function(dir_out = "path_to_directory",
         if (length(zip_link) > 0 && !is.na(zip_link) && !(zip_link %in% downloaded_links)) {
           cat("\nFound 'Download all data (ZIP)' link. Attempting download...\n")
           tryCatch({
-            download_data_from_url(url = zip_link)
+            download_data_from_url(url = zip_link, parent_url = parent_url)
             downloaded_links <- c(downloaded_links, zip_link)
           }, error = function(e) {
             cat("Failed to download URL:", zip_link, "\nError message:", e$message, "\n")
@@ -487,7 +601,7 @@ webscrape_government_data <- function(dir_out = "path_to_directory",
               next
             }
             tryCatch({
-              download_data_from_url(url = dl)
+              download_data_from_url(url = dl, parent_url = parent_url)
               downloaded_links <- c(downloaded_links, dl)
             }, error = function(e) {
               cat("Failed to download URL:", dl, "\nError message:", e$message, "\n")
