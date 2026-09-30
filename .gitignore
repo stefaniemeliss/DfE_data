@@ -8,3 +8,6 @@ data/*
 *.txt
 *.log
 .ipynb_checkpoints/*
+*.csv
+*.zip
+*.xlsx
