@@ -1062,155 +1062,355 @@ standardise_column_names <- function(df, lookup = reverse_lookup) {
 }
 
 
-create_urn_laestab_lookup_pa <- function(data_in = df, original_name = NULL) {
+# Create URN / LAESTAB lookup using Per Annum GIAS
+create_urn_laestab_lookup_pa <- function(data_in,
+                                         gias,
+                                         time_period,
+                                         original_name = NULL) {
   
-  # Use provided name or try to get it from substitute
-  if (is.null(original_name)) {
-    dataset_name <- deparse(substitute(data_in))
+  #' Create URN / LAESTAB lookup and optionally expand reference GIAS
+  #'
+  #' Purpose:
+  #'   - Build a lookup table that maps each unique (school_urn, school_laestab)
+  #'     pair in `data_in` to a (hopefully) correct URN, using GIAS as the
+  #'     reference.
+  #'   - Optionally expand the reference GIAS (`gias_ref`) with the closest
+  #'     available rows for:
+  #'       * URNs that exist in some GIAS year but not in the target year.
+  #'       * LAESTABs for URNs that do not exist in any GIAS year, when the
+  #'         LAESTAB itself exists in GIAS.
+  #'
+  #' Intended logic:
+  #'   1. For all rows where `school_urn` exists in GIAS (school_urn == URN),
+  #'      bring in the corresponding LAESTAB (and other GIAS fields).
+  #'   2. For rows where `school_urn` does NOT occur in any GIAS year,
+  #'      use `school_laestab` to match LAESTAB in GIAS and recover the correct URN.
+  #'
+  #' Expansion rules:
+  #'   - URN expansion:
+  #'       * For URNs that are missing from the reference year but exist in
+  #'         some other GIAS year, add the closest year's row to `gias_ref`.
+  #'   - LAESTAB expansion:
+  #'       * Only when:
+  #'           - URN not in any GIAS year (!urn_in_gias),
+  #'           - LAESTAB not in the reference year (!lae_in_ref),
+  #'           - LAESTAB exists somewhere in the full GIAS (lae_in_gias).
+  #'       * For such LAESTABs, add the closest year's row to `gias_ref`.
+  #'
+  #' Lookup construction:
+  #'   - Start from one row per unique (school_urn, school_laestab).
+  #'   - First join: match by URN (school_urn == URN) to add GIAS fields
+  #'     (including LAESTAB) for schools that exist in the reference GIAS.
+  #'   - Second join: restricted to LAESTABs belonging to URNs that are missing
+  #'     from all GIAS years; join on (LAESTAB, Data_Download_Date, School_Name)
+  #'     to recover the correct URN where possible.
+  #'   - Final URN is:
+  #'       * The URN from the first join if present,
+  #'       * Otherwise the URN recovered via LAESTAB (if any).
+  #'
+  #' Safeguards:
+  #'   - Checks that URN is unique in `gias_ref`.
+  #'   - Checks that (LAESTAB, Data_Download_Date, School_Name) is unique for
+  #'     LAESTABs associated with URNs that are missing from all GIAS years.
+  #'   - Stops if the final lookup does not have exactly one row per unique
+  #'     (school_urn, school_laestab) pair.
+  #'
+  #' @param data_in       Data frame with at least `school_urn` and `school_laestab`.
+  #'                      May also have `urn` / `laestab`, which will be renamed.
+  #' @param gias          Full GIAS data with at least `Academic_Year`, `URN`, `LAESTAB`,
+  #'                      plus `Data_Download_Date` and `School_Name` for the second join.
+  #' @param time_period   Target academic year (e.g. 202223). Values < 202021 are
+  #'                      treated as 202021.
+  #' @param original_name Optional name for the dataset (used only in the output list).
+  #'
+  #' @return A list with:
+  #'   \describe{
+  #'     \item{dataset_name}{Character name for the input dataset.}
+  #'     \item{lookup}{Data frame with one row per unique (school_urn, school_laestab)
+  #'                   and a resolved `URN` column.}
+  #'     \item{modified_data}{The original `data_in` (with possible column renames).}
+  #'     \item{gias_ref}{The expanded reference GIAS used for the lookup.}
+  #'   }
+  
+  
+  # Optional dataset name (only used if you want it in the output)
+  dataset_name <- if (is.null(original_name)) {
+    deparse(substitute(data_in))
   } else {
-    dataset_name <- original_name
+    original_name
   }
   
-  # rename columns for consistency
-  # this assumes that either laestab OR school_laestab are used as column names, NOT both
-  if ("urn" %in% names(data_in)) {
-    data_in <- data_in %>%
-      rename(school_urn = urn)  
-  }
-  if ("laestab" %in% names(data_in)) {
-    data_in <- data_in %>%
-      rename(school_laestab = laestab)  
+  # Standardise input column names
+  if ("urn" %in% names(data_in) && !"school_urn" %in% names(data_in)) {
+    data_in <- data_in %>% dplyr::rename(school_urn = urn)
   }
   
-  # Export the modified data to global environment
-  assign(dataset_name, data_in, envir = .GlobalEnv)
+  if ("laestab" %in% names(data_in) && !"school_laestab" %in% names(data_in)) {
+    data_in <- data_in %>% dplyr::rename(school_laestab = laestab)
+  }
   
-  # find GIAS for that academic year
-  if (year <= 2020) gias_ref <- gias[gias$Academic_Year == 202021, ] else gias_ref <- gias[gias$Academic_Year == time_period, ] 
+  # Check required columns exist
+  required_data_cols <- c("school_urn", "school_laestab")
+  missing_data_cols <- setdiff(required_data_cols, names(data_in))
+  if (length(missing_data_cols) > 0) {
+    stop(
+      "data_in is missing required column(s): ",
+      paste(missing_data_cols, collapse = ", ")
+    )
+  }
   
-  # extract all id pairings #
-  # for each unique school_urn, check if it occurs in the gias
-  # if it does not, then the URN is wrong
-  ids <- data_in %>% 
-    # select columns
-    select(matches("urn|laestab")) %>%
-    # remove duplicated rows
-    filter(!duplicated(.)) %>%
-    # check for each URN if it exists in the identify problematic parings
-    mutate(
-      across(contains("urn"), ~ .x %in% gias_ref$URN, .names = "urn_in_ref"),
-      across(contains("laestab"), ~ .x %in% gias_ref$LAESTAB, .names = "lae_in_ref"),
-      urn_in_gias = if_else(!urn_in_ref, school_urn %in% gias$URN, TRUE),
-      lae_in_gias = if_else(!lae_in_ref, school_laestab %in% gias$LAESTAB, TRUE)
+  required_gias_cols <- c("Academic_Year", "URN", "LAESTAB")
+  missing_gias_cols <- setdiff(required_gias_cols, names(gias))
+  if (length(missing_gias_cols) > 0) {
+    stop(
+      "gias is missing required column(s): ",
+      paste(missing_gias_cols, collapse = ", ")
+    )
+  }
+  
+  # Reference GIAS for the requested academic year
+  if (time_period < 202021) {
+    gias_ref <- gias %>%
+      dplyr::filter(Academic_Year == 202021)
+  } else {
+    gias_ref <- gias %>%
+      dplyr::filter(Academic_Year == time_period)
+  } 
+  
+  # Unique ID pairs from input
+  ids <- data_in %>%
+    dplyr::select(school_urn, school_laestab) %>%
+    dplyr::distinct() %>%
+    dplyr::mutate(
+      urn_in_ref = school_urn %in% gias_ref$URN,
+      lae_in_ref = school_laestab %in% gias_ref$LAESTAB,
+      urn_in_gias = school_urn %in% gias$URN,
+      lae_in_gias = school_laestab %in% gias$LAESTAB
     ) %>%
-    # sort data
-    arrange(school_urn) %>%
+    dplyr::arrange(school_urn) %>%
     as.data.frame()
   
-  # print information on whether all school urns and laestabs were correct into console
-  if (sum(ids$urn_in_ref == F) != 0) message("Note that ", sum(ids$urn_in_ref == F), " URN(s) out of ", nrow(ids), " were NOT found in reference GIAS data.")
-  if (sum(ids$urn_in_gias == F) != 0) message("Note that ", sum(ids$urn_in_gias == F), " URN(s) out of ", nrow(ids), " were NOT found in any GIAS data.")
-  if (sum(ids$lae_in_ref == F) != 0) message("Note that ", sum(ids$lae_in_ref == F), " LAESTAB(s) out of ", nrow(ids), " were NOT found in reference GIAS data.")
-  if (sum(ids$lae_in_gias == F) != 0) message("Note that ", sum(ids$lae_in_gias == F), " LAESTAB(s) out of ", nrow(ids), " were NOT found in any GIAS data.")
-  
-  # expand reference gias to include missing schools (if any) - URN
-  if (sum(ids$urn_in_ref == F) > sum(ids$urn_in_gias == F)) {
-    gias_ref <- gias_ref %>%
-      bind_rows(gias %>% 
-                  filter(URN %in% ids$school_urn[!ids$urn_in_ref & ids$urn_in_gias]) %>%
-                  mutate(time_diff = time_period - Academic_Year) %>%
-                  group_by(URN) %>%
-                  slice(which.min(time_diff)) %>%
-                  select(-time_diff)
-      )
+  # Messages
+  if (any(!ids$urn_in_ref)) {
+    message("Note that ", sum(!ids$urn_in_ref), " URN(s) out of ", nrow(ids),
+            " were not found in reference GIAS data (", time_period, ").")
+  }
+  if (any(!ids$urn_in_gias)) {
+    message("Note that ", sum(!ids$urn_in_gias), " URN(s) out of ", nrow(ids),
+            " were not found in any GIAS data.")
   }
   
-  # expand reference gias to include missing schools (if any) - LAESTAB
-  if (sum(ids$lae_in_ref == F) > sum(ids$lae_in_gias == F)) {
-    gias_ref <- gias_ref %>%
-      bind_rows(gias %>% 
-                  filter(LAESTAB %in% ids$school_laestab[!ids$lae_in_ref & ids$lae_in_gias]) %>%
-                  mutate(time_diff = time_period - Academic_Year) %>%
-                  group_by(LAESTAB) %>%
-                  slice(which.min(time_diff)) %>%
-                  select(-time_diff)
-      )
+  # Expand reference GIAS with closest available row for URNs
+  missing_urns_in_ref <- ids$school_urn[!ids$urn_in_ref & ids$urn_in_gias]
+  
+  if (length(missing_urns_in_ref) > 0) {
+    gias_ref_extra_urn <- gias %>%
+      dplyr::filter(URN %in% missing_urns_in_ref) %>%
+      dplyr::mutate(time_diff = abs(Academic_Year - time_period)) %>%
+      dplyr::group_by(URN) %>%
+      dplyr::slice_min(time_diff, n = 1, with_ties = FALSE) %>%
+      dplyr::ungroup() %>%
+      dplyr::select(-time_diff)
+    
+    gias_ref <- dplyr::bind_rows(gias_ref, gias_ref_extra_urn) %>%
+      dplyr::distinct()
   }
   
-  # create id lookup table for each urn #
+  # Update ids
+  ids <- ids %>%
+    dplyr::mutate(
+      urn_in_ref = school_urn %in% gias_ref$URN,
+      lae_in_ref = school_laestab %in% gias_ref$LAESTAB
+    ) %>%
+    dplyr::arrange(school_urn) %>%
+    as.data.frame()
   
-  # one of four scenarios
-  #   1. urn and lae both match --> !is.na(URN) & !is.na(LAESTAB)
-  #   2. urn matches but lae does not --> !is.na(URN) & is.na(LAESTAB)
-  #   3. lae matches but urn does not --> is.na(URN) & !is.na(LAESTAB)
-  #   4. neither matches --> is.na(URN) & is.na(LAESTAB)
+  # Expand reference GIAS with closest available row for LAESTABs
+  # ONLY when:
+  #   - URN not in any GIAS
+  #   - LAESTAB not in reference year
+  #   - LAESTAB exists somewhere in full GIAS
+  missing_laes_in_ref <- ids$school_laestab[
+    !ids$urn_in_gias & !ids$lae_in_ref & ids$lae_in_gias
+  ]
+  
+  if (length(missing_laes_in_ref) > 0) {
+    gias_ref_extra_lae <- gias %>%
+      dplyr::filter(LAESTAB %in% missing_laes_in_ref) %>%
+      dplyr::mutate(time_diff = abs(Academic_Year - time_period)) %>%
+      dplyr::group_by(LAESTAB) %>%
+      dplyr::slice_min(time_diff, n = 1, with_ties = FALSE) %>%
+      dplyr::ungroup() %>%
+      dplyr::select(-time_diff)
+    
+    gias_ref <- dplyr::bind_rows(gias_ref, gias_ref_extra_lae) %>%
+      dplyr::distinct()
+  }
+  
+  # Check uniqueness
+  if (gias_ref %>% count(URN) %>% filter(n > 1) %>% nrow() > 0) {
+    message("WARNING: URN is NOT unique in gias_ref")
+  }
+  
+  # Only problematic for URNs not found in any GIAS year
+  bad_lae <- ids$school_laestab[!ids$urn_in_gias]
+  if (gias_ref %>%
+      filter(LAESTAB %in% bad_lae) %>%
+      count(LAESTAB, Data_Download_Date, School_Name) %>%
+      filter(n > 1) %>%
+      nrow() > 0) {
+    message("WARNING: (LAESTAB, Data_Download_Date, School_Name) not unique for bad-URN LAESTABs")
+  }  
+  
+  # Build lookup table: one row per unique (school_urn, school_laestab)
+  #
+  # Intended logic:
+  #   1. For all rows where school_urn exists in GIAS (school_urn == URN),
+  #      bring in the corresponding LAESTAB (and other GIAS fields).
+  #   2. For rows where school_urn does NOT occur in any GIAS year,
+  #      use school_laestab to match LAESTAB in GIAS and recover the correct URN.
   
   id_lookup <- ids %>%
-    select(!contains("_in_")) %>%
-    # add GIAS URNs and matching LAESTABs for all urns #
-    left_join(., gias_ref %>%
-                select(-Academic_Year) %>%
-                mutate(urn = URN),
-              join_by(school_urn == urn)
+    dplyr::select(!dplyr::contains("_in_")) %>%
+    
+    # 1) Match by URN (school_urn == URN) to add the GIAS LAESTAB (and other fields)
+    #    for all schools that exist in the reference GIAS.
+    dplyr::left_join(
+      .,
+      gias_ref %>%
+        dplyr::select(-Academic_Year) %>%
+        dplyr::mutate(urn = URN),
+      dplyr::join_by(school_urn == urn)
     ) %>%
-    # FIX URNs #
-    #   add correct urn numbers for urns without a match
-    #   mapping between urn and laestab for all incorrect urns
-    #   note: urn_gias will only be added if school_urn did not exist in the data, else urn_gias is NA
-    left_join(., gias_ref %>%
-                filter(LAESTAB %in% ids$school_laestab[!ids$urn_in_gias]) %>%
-                rename(tmp = URN) %>%
-                select(-Academic_Year),
-              join_by(school_laestab == LAESTAB, Data_Download_Date, School_Name)
+    
+    # 2) For schools where school_urn does NOT occur in any GIAS year,
+    #    use school_laestab to match LAESTAB in GIAS and recover the correct URN.
+    #    We restrict to LAESTABs belonging to URNs that are missing from all GIAS,
+    #    then join on (LAESTAB, Data_Download_Date, School_Name). The matched URN
+    #    comes in as `tmp` and overwrites URN where available.
+    dplyr::left_join(
+      .,
+      gias_ref %>%
+        dplyr::filter(LAESTAB %in% ids$school_laestab[!ids$urn_in_gias]) %>%
+        dplyr::rename(tmp = URN) %>%
+        dplyr::select(-Academic_Year),
+      dplyr::join_by(school_laestab == LAESTAB, Data_Download_Date, School_Name)
     ) %>%
-    mutate(URN = if_else(!is.na(tmp), tmp, URN)) %>%
-    select(-tmp)
+    dplyr::mutate(URN = dplyr::if_else(!is.na(tmp), tmp, URN)) %>%
+    dplyr::select(-tmp)
   
-  # Return both the lookup and the modified data
+  # Safety check: lookup should have same number of rows as ids
+  if (nrow(id_lookup) != nrow(ids)) {
+    stop(
+      "Internal error: id_lookup has ", nrow(id_lookup),
+      " rows but should have ", nrow(ids), " rows."
+    )
+  }
+  
   return(list(
+    dataset_name = dataset_name,
     lookup = id_lookup,
-    modified_data = data_in
+    modified_data = data_in,
+    gias_ref = gias_ref
   ))
 }
 
 
-cleanup_data_pa <- function(data_in = df) {
+# Clean up education data using Per Annum URN/LAESTAB lookup
+cleanup_data_pa <- function(data_in = df, gias, time_period) {
   
-  # Get the original dataset name
+  #' Clean up education data using URN/LAESTAB lookup
+  #'
+  #' Purpose:
+  #'   - Use `create_urn_laestab_lookup_pa()` to resolve correct URNs and LAESTABs
+  #'     for a school-level dataset.
+  #'   - Merge the resolved IDs back into the original data.
+  #'   - Rename ID columns to include the original dataset name as a suffix
+  #'     (e.g. `urn_swc`, `laestab_swc`).
+  #'   - Remove duplicate school entries per (time_period, URN).
+  #'   - Drop `school_name` if present (to avoid redundancy with GIAS-based names).
+  #'
+  #' Intended logic:
+  #'   1. Call `create_urn_laestab_lookup_pa()` to:
+  #'      - Standardise ID columns to `school_urn` and `school_laestab`.
+  #'      - Expand reference GIAS where appropriate.
+  #'      - Build a lookup with one row per unique (school_urn, school_laestab)
+  #'        and a resolved `URN`.
+  #'   2. Join the lookup back to the (possibly renamed) input data via a
+  #'      `full_join`, so that:
+  #'      - All rows from both tables are kept.
+  #'      - Resolved URNs and GIAS fields are attached where possible.
+  #'   3. Rename ID columns:
+  #'      - `school_urn` → `urn_<original_dataset_name>`
+  #'      - `school_laestab` → `laestab_<original_dataset_name>`
+  #'   4. Sort by `LAESTAB` and `time_period`.
+  #'   5. Remove duplicate school entries:
+  #'      - Within each (time_period, URN) group, keep only groups with a single
+  #'        row (i.e. drop schools that have more than one entry per year).
+  #'   6. Drop `school_name` if it exists (optional cleanup step).
+  #'
+  #' @param data_in     Data frame with school-level data. Must contain at least
+  #'                    `school_urn` or `urn`, and `school_laestab` or `laestab`,
+  #'                    plus `time_period` and `URN` (or columns that will become
+  #'                    these after lookup).
+  #' @param gias        Full GIAS data as required by `create_urn_laestab_lookup_pa()`.
+  #' @param time_period Target academic year (passed to the lookup function).
+  #'
+  #' @return A cleaned data frame with:
+  #'   - Resolved URN and LAESTAB columns named `urn_<dataset>` and `laestab_<dataset>`.
+  #'   - Duplicates per (time_period, URN) removed.
+  #'   - `school_name` dropped if it existed.
+  
+  
+  # Get the original dataset name (for column naming)
   original_dataset_name <- deparse(substitute(data_in))
   
-  # create id lookup table for each urn, passing the original name
-  result <- create_urn_laestab_lookup_pa(data_in = data_in, 
-                                      original_name = original_dataset_name)
+  # Create ID lookup table for each URN, passing the original dataset name
+  # This also standardises column names to school_urn / school_laestab and
+  # optionally expands gias_ref with closest available rows for missing URNs/LAESTABs.
+  result <- create_urn_laestab_lookup_pa(
+    data_in = data_in,
+    original_name = original_dataset_name,
+    gias = gias,
+    time_period = time_period
+  )
   
   # Extract both the lookup and the modified data
   id_lookup <- result$lookup
-  data_in <- result$modified_data  # This has the renamed columns!
+  data_in <- result$modified_data  # This has the renamed columns (school_urn, school_laestab)
   
   old_name1 <- "school_urn"
   new_name1 <- paste0("urn_", original_dataset_name)
   old_name2 <- "school_laestab"
   new_name2 <- paste0("laestab_", original_dataset_name)
   
-  # fix id information in input data
-  data_in <- data_in %>% 
-    # add correct ids
-    full_join(id_lookup, .) %>%
-    # rename column
-    rename(!!new_name1 := !!old_name1, 
-           !!new_name2 := !!old_name2) %>%
-    # sort data
-    arrange(LAESTAB, time_period) %>%
-    # remove schools with more than one entry per year
-    group_by(time_period, URN) %>%
-    filter(n() == 1) %>%
-    ungroup() %>%
+  # Fix ID information in input data
+  data_in <- data_in %>%
+    # Add correct IDs by joining the lookup to the data.
+    # Using full_join keeps all rows from both tables; adjust if you prefer
+    # left_join(data_in, id_lookup, by = c("school_urn", "school_laestab")).
+    dplyr::full_join(id_lookup, .) %>%
+    
+    # Rename ID columns to include the original dataset name as a suffix
+    dplyr::rename(
+      !!new_name1 := !!old_name1,
+      !!new_name2 := !!old_name2
+    ) %>%
+    
+    # Sort data by LAESTAB and time_period
+    dplyr::arrange(LAESTAB, time_period) %>%
+    
+    # Remove schools with more than one entry per (time_period, URN)
+    # This keeps only groups where there is exactly one row per year.
+    dplyr::group_by(time_period, URN) %>%
+    dplyr::filter(n() == 1) %>%
+    dplyr::ungroup() %>%
     as.data.frame()
   
+  # Remove school_name if present (optional cleanup; avoids redundancy with GIAS)
   if ("school_name" %in% names(data_in)) {
     data_in$school_name <- NULL
   }
   
   return(data_in)
 }
-
